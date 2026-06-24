@@ -40,10 +40,17 @@ sqlite3 ~/inkwell.db "SELECT timestamp, app_name, key_char FROM keystrokes ORDER
 ```
 
 ### 3. Generate Diary
-Export session diary to `~/Desktop/writing-history.md`:
+Export session diary (last 7 days only) to `~/Desktop/writing-history.md`:
 ```bash
 uv run src/inkwell/diary.py
 ```
+
+### 4. Clean Database
+Prune old database records (e.g., older than 30 days) and vacuum:
+```bash
+uv run src/inkwell/clean.py 30
+```
+*(Also available in Raycast as "Inkwell Clean DB" script command)*
 
 ---
 

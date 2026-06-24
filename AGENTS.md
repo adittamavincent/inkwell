@@ -140,6 +140,7 @@ Path: `src/inkwell/diary.py`
 Yang harus dilakukan:
 
 - Baca tabel `keystrokes` dari `/Users/adittama/inkwell.db` urut ascending
+- Filter hanya 7 hari terakhir: `timestamp >= datetime.now(timezone.utc) - timedelta(days=7)`
 - Group jadi sesi: gap lebih dari 120 detik di app yang sama = sesi baru
 - Concatenate `key_char` per sesi jadi satu string
 - Skip sesi yang setelah di-strip panjangnya kurang dari 5 karakter
@@ -160,6 +161,16 @@ Yang harus dilakukan:
 
 ---
 
+## Spec: clean.py & scripts/inkwell-clean.sh
+
+Path: `src/inkwell/clean.py` & `/Users/adittama/repositories/Inkwell/scripts/inkwell-clean.sh`
+
+- Hapus baris di `keystrokes` yang lebih lama dari N hari (default 30)
+- Jalankan `VACUUM` setelah delete
+- Raycast command `@raycast.mode compact`, terima 1 parameter opsional (jumlah hari)
+
+---
+
 ## Spec: scripts/inkwell-diary.sh
 
 Path: `/Users/adittama/repositories/Inkwell/scripts/inkwell-diary.sh`
@@ -171,7 +182,7 @@ Path: `/Users/adittama/repositories/Inkwell/scripts/inkwell-diary.sh`
 # @raycast.mode silent
 
 cd /Users/adittama/repositories/Inkwell
-uv run src/inkwell/diary.py
+/opt/homebrew/bin/uv run src/inkwell/diary.py
 open /Users/adittama/Desktop/writing-history.md
 ```
 
