@@ -17,10 +17,9 @@ EventTap requires **Input Monitoring** permissions.
    ```bash
    open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
    ```
-2. Add the Python interpreter target:
+2. Add the permission target:
    - For development: Add your terminal application (e.g., Terminal, Alacritty).
-   - For LaunchAgent daemon: Add the exact Python executable used by `uv`:
-     `/Users/adittama/.local/share/uv/python/cpython-3.11-macos-aarch64-none/bin/python3.11`
+   - For LaunchAgent daemon: Add the compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon`.
 3. Toggle the checkmark ON.
 
 ---
@@ -88,6 +87,8 @@ uv run src/inkwell/clean.py 30
 To update the codebase and restart the daemon:
 ```bash
 git pull
+# Rebuild binary
+uv run --with pyinstaller pyinstaller --onefile --name inkwell-daemon src/inkwell/daemon.py
 # Reload LaunchAgent to apply changes
 launchctl unload ~/Library/LaunchAgents/com.inkwell.daemon.plist 2>/dev/null
 launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist

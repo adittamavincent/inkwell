@@ -6,9 +6,7 @@
     <string>com.inkwell.daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/uv</string>
-        <string>run</string>
-        <string>src/inkwell/daemon.py</string>
+        <string>/Users/adittama/repositories/Inkwell/dist/inkwell-daemon</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/adittama/repositories/Inkwell</string>

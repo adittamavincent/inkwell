@@ -198,14 +198,12 @@ Deploy ke: `/Users/adittama/Library/LaunchAgents/com.inkwell.daemon.plist`
 Key yang wajib ada:
 
 - Label: `com.inkwell.daemon`
-- ProgramArguments: path uv + `run` + `src/inkwell/daemon.py`
+- ProgramArguments: path ke compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon`
 - WorkingDirectory: `/Users/adittama/repositories/Inkwell`
 - RunAtLoad: true
 - KeepAlive: true
 - StandardOutPath: `/Users/adittama/Library/Logs/inkwell.log`
 - StandardErrorPath: `/Users/adittama/Library/Logs/inkwell-error.log`
-
-Path uv: cek dengan `which uv` sebelum hardcode. Biasanya `/opt/homebrew/bin/uv`.
 
 ---
 
@@ -217,7 +215,7 @@ Input Monitoring SAJA. Tidak perlu Screen Recording, Accessibility, Microphone.
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
 ```
 
-Tambahkan `uv` atau binary Python yang dipakai ke list, toggle ON.
+Tambahkan compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon` ke list, toggle ON.
 
 ---
 
