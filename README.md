@@ -51,6 +51,12 @@ uv run src/inkwell/clean.py 30
 ```
 *(Also available in Raycast as "Inkwell Clean DB" script command)*
 
+### 5. Build Binary
+Compile the daemon script into a standalone executable:
+```bash
+uv run --with pyinstaller pyinstaller --onefile --name inkwell-daemon src/inkwell/daemon.py
+```
+
 ---
 
 ## Production Deployment (LaunchAgent)
