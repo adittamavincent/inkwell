@@ -41,26 +41,25 @@ Screenpipe pakai Accessibility API, bukan CGEventTap. Backspace, delete, modifie
 
 ---
 
-## Struktur repo (kondisi SEKARANG)
+## Struktur repo
 
 ```
 /Users/adittama/repositories/Inkwell/
-├── AGENTS.md              ← file ini
-├── README.md              ← stub, belum diisi
-└── pyproject.toml         ← sudah ada, isinya di bawah
+├── .gitignore
+├── AGENTS.md
+├── README.md
+├── pyproject.toml
+├── com.inkwell.daemon.plist
+├── scripts/
+│   ├── inkwell-diary.sh
+│   └── inkwell-clean.sh
+└── src/
+    └── inkwell/
+        ├── __init__.py
+        ├── daemon.py
+        ├── diary.py
+        └── clean.py
 ```
-
-File yang BELUM ADA dan harus dibuat:
-
-```
-src/inkwell/__init__.py
-src/inkwell/daemon.py
-src/inkwell/diary.py
-scripts/inkwell-diary.sh
-com.inkwell.daemon.plist
-```
-
-JANGAN cari file-file di atas di luar repo. Mereka belum exist. Buat dari scratch berdasarkan spec di bawah.
 
 ---
 
@@ -273,14 +272,3 @@ launchctl list | grep inkwell
 
 ---
 
-## Next step
-
-Buat file-file ini secara berurutan:
-
-1. `src/inkwell/__init__.py` (kosong)
-2. `src/inkwell/daemon.py`
-3. `src/inkwell/diary.py`
-4. `scripts/inkwell-diary.sh`
-5. `com.inkwell.daemon.plist`
-
-Setelah semua file ada, commit dan push ke GitHub.
