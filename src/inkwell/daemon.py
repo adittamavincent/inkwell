@@ -64,7 +64,7 @@ def get_key_char(event, key_code):
     else:
         # Get Unicode string representation
         actual_length, characters = Quartz.CGEventKeyboardGetUnicodeString(event, 100, None, None)
-        base = "".join(map(chr, characters)) if actual_length > 0 else ""
+        base = characters if actual_length > 0 else ""
 
     # Determine modifier prefix
     prefix = ""
