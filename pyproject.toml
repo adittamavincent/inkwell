@@ -1,0 +1,14 @@
+[project]
+name = "inkwell"
+version = "0.1.0"
+description = "macOS keystroke daemon using CGEventTap"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyobjc-framework-Quartz>=10.2",
+    "pyobjc-framework-AppKit>=10.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
