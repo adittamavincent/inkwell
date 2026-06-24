@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pyobjc-framework-Quartz>=10.2",
-    "pyobjc-framework-AppKit>=10.2",
+    "pyobjc-framework-Cocoa>=10.2",
 ]
 
 [build-system]
