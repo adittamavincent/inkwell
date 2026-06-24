@@ -197,7 +197,7 @@ Deploy ke: `/Users/adittama/Library/LaunchAgents/com.inkwell.daemon.plist`
 Key yang wajib ada:
 
 - Label: `com.inkwell.daemon`
-- ProgramArguments: path ke compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon`
+- ProgramArguments: path ke compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon.app/Contents/MacOS/inkwell-daemon`
 - WorkingDirectory: `/Users/adittama/repositories/Inkwell`
 - RunAtLoad: true
 - KeepAlive: true
@@ -214,7 +214,7 @@ Input Monitoring SAJA. Tidak perlu Screen Recording, Accessibility, Microphone.
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
 ```
 
-Tambahkan compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon` ke list, toggle ON.
+Tambahkan compiled app bundle `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon.app` ke list, toggle ON.
 
 ---
 

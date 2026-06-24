@@ -6,7 +6,7 @@
     <string>com.inkwell.daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/adittama/repositories/Inkwell/dist/inkwell-daemon</string>
+        <string>/Users/adittama/repositories/Inkwell/dist/inkwell-daemon.app/Contents/MacOS/inkwell-daemon</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/adittama/repositories/Inkwell</string>

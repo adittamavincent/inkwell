@@ -19,7 +19,7 @@ EventTap requires **Input Monitoring** permissions.
    ```
 2. Add the permission target:
    - For development: Add your terminal application (e.g., Terminal, Alacritty).
-   - For LaunchAgent daemon: Add the compiled binary `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon`.
+   - For LaunchAgent daemon: Add the compiled app bundle `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon.app`.
 3. Toggle the checkmark ON.
 
 ---
@@ -51,10 +51,10 @@ uv run src/inkwell/clean.py 30
 ```
 *(Also available in Raycast as "Inkwell Clean DB" script command)*
 
-### 5. Build Binary
-Compile the daemon script into a standalone executable:
+### 5. Build App Bundle
+Compile the daemon script into a standalone macOS `.app` bundle:
 ```bash
-uv run --with pyinstaller pyinstaller --onefile --name inkwell-daemon src/inkwell/daemon.py
+uv run --with pyinstaller pyinstaller --windowed --name inkwell-daemon src/inkwell/daemon.py
 ```
 
 ---
@@ -94,7 +94,7 @@ To update the codebase and restart the daemon:
 ```bash
 git pull
 # Rebuild binary
-uv run --with pyinstaller pyinstaller --onefile --name inkwell-daemon src/inkwell/daemon.py
+uv run --with pyinstaller pyinstaller --windowed --name inkwell-daemon src/inkwell/daemon.py
 # Reload LaunchAgent to apply changes
 launchctl unload ~/Library/LaunchAgents/com.inkwell.daemon.plist 2>/dev/null
 launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist
