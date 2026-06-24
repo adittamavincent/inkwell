@@ -17,7 +17,11 @@ EventTap requires **Input Monitoring** permissions.
    ```bash
    open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
    ```
-2. Add and enable `/opt/homebrew/bin/uv` or your terminal app.
+2. Add the Python interpreter target:
+   - For development: Add your terminal application (e.g., Terminal, Alacritty).
+   - For LaunchAgent daemon: Add the exact Python executable used by `uv`:
+     `/Users/adittama/.local/share/uv/python/cpython-3.11-macos-aarch64-none/bin/python3.11`
+3. Toggle the checkmark ON.
 
 ---
 
@@ -49,8 +53,9 @@ uv run src/inkwell/diary.py
    ```bash
    cp com.inkwell.daemon.plist ~/Library/LaunchAgents/
    ```
-2. Load agent:
+2. Load agent (unload first if already loaded to avoid error 5):
    ```bash
+   launchctl unload ~/Library/LaunchAgents/com.inkwell.daemon.plist 2>/dev/null
    launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist
    ```
 3. Check status (should display PID):
