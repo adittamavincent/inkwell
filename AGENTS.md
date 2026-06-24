@@ -44,7 +44,7 @@ Screenpipe pakai Accessibility API, bukan CGEventTap. Backspace, delete, modifie
 ## Struktur repo (kondisi SEKARANG)
 
 ```
-/Users/adittama/repos/inkwell/
+/Users/adittama/repositories/Inkwell/
 ├── AGENTS.md              ← file ini
 ├── README.md              ← stub, belum diisi
 └── pyproject.toml         ← sudah ada, isinya di bawah
@@ -162,7 +162,7 @@ Yang harus dilakukan:
 
 ## Spec: scripts/inkwell-diary.sh
 
-Path: `/Users/adittama/repos/inkwell/scripts/inkwell-diary.sh`
+Path: `/Users/adittama/repositories/Inkwell/scripts/inkwell-diary.sh`
 
 ```bash
 #!/bin/bash
@@ -170,7 +170,7 @@ Path: `/Users/adittama/repos/inkwell/scripts/inkwell-diary.sh`
 # @raycast.title Inkwell Diary
 # @raycast.mode silent
 
-cd /Users/adittama/repos/inkwell
+cd /Users/adittama/repositories/Inkwell
 uv run src/inkwell/diary.py
 open /Users/adittama/Desktop/writing-history.md
 ```
@@ -181,14 +181,14 @@ Permission: chmod +x wajib setelah dibuat.
 
 ## Spec: com.inkwell.daemon.plist
 
-Path di repo: `/Users/adittama/repos/inkwell/com.inkwell.daemon.plist`
+Path di repo: `/Users/adittama/repositories/Inkwell/com.inkwell.daemon.plist`
 Deploy ke: `/Users/adittama/Library/LaunchAgents/com.inkwell.daemon.plist`
 
 Key yang wajib ada:
 
 - Label: `com.inkwell.daemon`
 - ProgramArguments: path uv + `run` + `src/inkwell/daemon.py`
-- WorkingDirectory: `/Users/adittama/repos/inkwell`
+- WorkingDirectory: `/Users/adittama/repositories/Inkwell`
 - RunAtLoad: true
 - KeepAlive: true
 - StandardOutPath: `/Users/adittama/Library/Logs/inkwell.log`
@@ -213,7 +213,7 @@ Tambahkan `uv` atau binary Python yang dipakai ke list, toggle ON.
 ## Cara run development
 
 ```bash
-cd /Users/adittama/repos/inkwell
+cd /Users/adittama/repositories/Inkwell
 uv run src/inkwell/daemon.py
 ```
 
@@ -233,7 +233,7 @@ sqlite3 /Users/adittama/inkwell.db \
 which uv
 
 # copy plist
-cp /Users/adittama/repos/inkwell/com.inkwell.daemon.plist \
+cp /Users/adittama/repositories/Inkwell/com.inkwell.daemon.plist \
    /Users/adittama/Library/LaunchAgents/
 
 # load
@@ -248,7 +248,7 @@ launchctl list | grep inkwell
 ## Raycast setup
 
 1. Raycast Settings → Extensions → Script Commands → Add Directory
-2. Pilih `/Users/adittama/repos/inkwell/scripts`
+2. Pilih `/Users/adittama/repositories/Inkwell/scripts`
 3. Command "Inkwell Diary" akan muncul
 4. Set hotkey: Hyperkey + Y
 
@@ -257,7 +257,7 @@ launchctl list | grep inkwell
 ## Hal yang JANGAN dilakukan
 
 - Jangan pakai pip atau venv, selalu uv
-- Jangan cari file source di luar `/Users/adittama/repos/inkwell/` — semua dibuat dari scratch
+- Jangan cari file source di luar `/Users/adittama/repositories/Inkwell/` — semua dibuat dari scratch
 - Jangan swallow keyboard events, selalu listen-only
 - Jangan hardcode path uv tanpa cek `which uv` dulu
 - Jangan pakai relative path di plist atau Raycast script
