@@ -73,3 +73,15 @@ uv run src/inkwell/diary.py
 1. Open Raycast Settings → Extensions → Script Commands.
 2. Click **Add Directory**, choose `/Users/adittama/repositories/Inkwell/scripts`.
 3. Trigger "Inkwell Diary" via hotkey (e.g. Hyperkey + Y).
+
+---
+
+## How to Update
+
+To update the codebase and restart the daemon:
+```bash
+git pull
+# Reload LaunchAgent to apply changes
+launchctl unload ~/Library/LaunchAgents/com.inkwell.daemon.plist 2>/dev/null
+launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist
+```
