@@ -6,160 +6,272 @@ Paste file ini ke awal conversation LLM manapun untuk langsung kerja tanpa perlu
 
 ## Apa ini
 
-Inkwell adalah macOS keystroke daemon berbasis CGEventTap. Tujuannya satu: rekam semua yang diketik user di app manapun, simpan ke SQLite lokal, dan sediakan cara mudah untuk lihat histori tersebut.
+macOS keystroke daemon berbasis CGEventTap. Rekam semua yang diketik di app manapun, simpan ke SQLite lokal, tampilkan sebagai diary markdown.
 
-Ini pet project personal, bukan produk komersial.
+Pet project personal. Bukan produk komersial.
 
 ---
 
 ## Kenapa dibuat
 
-Awalnya mencoba screenpipe (open source Rewind alternative) untuk tujuan yang sama. Tapi screenpipe pakai Accessibility API bukan CGEventTap, sehingga backspace, delete, dan modifier keys tidak ter-capture. Terlalu bloated untuk kebutuhan sederhana ini. Inkwell adalah pengganti yang jauh lebih simpel dan tepat sasaran.
-
----
-
-## Tech stack
-
-- Python 3 dengan uv/uvx sebagai package manager (bukan pip, bukan venv manual)
-- pyobjc-framework-Quartz untuk CGEventTap
-- pyobjc-framework-AppKit untuk deteksi frontmost app
-- SQLite sebagai storage (WAL mode)
-- LaunchAgent (launchd) sebagai daemon runner di macOS
-- Raycast Script Command untuk trigger viewer via hotkey
-
-Tidak ada server, tidak ada cloud, tidak ada dependency eksternal selain pyobjc.
+Screenpipe pakai Accessibility API, bukan CGEventTap. Backspace, delete, modifier keys tidak ter-capture. Terlalu bloated. Inkwell adalah pengganti yang lebih simpel dan tepat sasaran.
 
 ---
 
 ## Environment
 
-- MacBook Pro M1 Pro 2021, 14 inch, 16 GB unified memory
+- MacBook Pro M1 Pro 2021, 14 inch, 16 GB
 - macOS Tahoe 26
-- Shell: zsh
-- uv installed via Homebrew
-- Raycast + Hyperkey untuk hotkey management
 - Username: adittama
+- Home: /Users/adittama
+- Shell: zsh
+- uv: installed via Homebrew
+- Raycast + Hyperkey untuk hotkey
 
 ---
 
-## Arsitektur
+## Tech stack
+
+- Python 3.11+ dengan uv (BUKAN pip, BUKAN venv manual, BUKAN --break-system-packages)
+- pyobjc-framework-Quartz — CGEventTap
+- pyobjc-framework-AppKit — deteksi frontmost app
+- SQLite WAL mode — storage lokal
+- launchd LaunchAgent — daemon runner
+- Raycast Script Command — hotkey trigger
+
+---
+
+## Struktur repo (kondisi SEKARANG)
 
 ```
-inkwell/
+/Users/adittama/repos/inkwell/
 ├── AGENTS.md              ← file ini
-├── README.md
-├── pyproject.toml         ← uv project config
-├── src/
-│   └── inkwell/
-│       ├── daemon.py      ← CGEventTap daemon, tulis ke DB
-│       └── diary.py       ← baca DB, output writing-history.md
-├── scripts/
-│   └── inkwell-diary.sh   ← Raycast Script Command wrapper
-└── com.inkwell.daemon.plist ← LaunchAgent template
+├── README.md              ← stub, belum diisi
+└── pyproject.toml         ← sudah ada, isinya di bawah
+```
+
+File yang BELUM ADA dan harus dibuat:
+
+```
+src/inkwell/__init__.py
+src/inkwell/daemon.py
+src/inkwell/diary.py
+scripts/inkwell-diary.sh
+com.inkwell.daemon.plist
+```
+
+JANGAN cari file-file di atas di luar repo. Mereka belum exist. Buat dari scratch berdasarkan spec di bawah.
+
+---
+
+## pyproject.toml (sudah ada, jangan overwrite)
+
+```toml
+[project]
+name = "inkwell"
+version = "0.1.0"
+description = "macOS keystroke daemon using CGEventTap"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyobjc-framework-Quartz>=10.2",
+    "pyobjc-framework-AppKit>=10.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 ```
 
 ---
 
 ## Database schema
 
-Lokasi: `~/inkwell.db`
+Lokasi: `/Users/adittama/inkwell.db`
 
 ```sql
-CREATE TABLE keystrokes (
+CREATE TABLE IF NOT EXISTS keystrokes (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT NOT NULL,  -- ISO 8601 UTC
+    timestamp TEXT NOT NULL,
     app_name  TEXT,
-    key_char  TEXT,           -- rendered character atau simbol [⌫][⌘C] dst
+    key_char  TEXT,
     key_code  INTEGER
 );
-CREATE INDEX idx_ts ON keystrokes(timestamp);
+CREATE INDEX IF NOT EXISTS idx_ts ON keystrokes(timestamp);
 ```
 
 ---
 
-## Key design decisions
+## Spec: daemon.py
 
-- CGEventTap di `kCGSessionEventTap` + `kCGTailAppendEventTap` + `kCGEventTapOptionListenOnly` — listen only, tidak intercept/swallow events
-- Timestamp disimpan UTC, ditampilkan dalam local time (WIB, UTC+7) via `.astimezone()`
-- Key rendering: huruf biasa jadi plaintext, special keys jadi simbol unicode ([⌫][↵][⇥] dst), modifier combos jadi [⌘C][⌥⌫] dst
-- Session grouping di diary: gap lebih dari 120 detik di app yang sama = sesi baru
-- Daemon auto-restart via `KeepAlive: true` di LaunchAgent
+Path: `src/inkwell/daemon.py`
+
+Yang harus dilakukan:
+
+- Buat CGEventTap di `kCGSessionEventTap` + `kCGTailAppendEventTap` + `kCGEventTapOptionListenOnly`
+- Listen `kCGEventKeyDown` saja
+- Handle `kCGEventTapDisabledByTimeout` dengan re-enable tap
+- Mapping key_code ke karakter:
+  - Huruf/angka/simbol: plaintext
+  - Backspace (51): `[⌫]`
+  - Forward delete (117): `[⌦]`
+  - Enter (36): `[↵]`
+  - Tab (48): `[⇥]`
+  - Space (49): ` ` (spasi biasa)
+  - Arrow keys (123/124/125/126): `[←][→][↓][↑]`
+  - Escape (53): `[ESC]`
+- Modifier detection via CGEventGetFlags bitmask:
+  - Cmd: bit 20 (0x100000)
+  - Option: bit 19 (0x80000)
+  - Ctrl: bit 18 (0x40000)
+  - Shift: bit 17 (0x20000)
+- Modifier combos dirender sebagai prefix: `[⌘C]`, `[⌥⌫]`, dst
+- Shift + huruf = uppercase, tanpa prefix `[⇧]`
+- Ambil frontmost app via `NSWorkspace.sharedWorkspace().frontmostApplication().localizedName()`
+- Simpan ke `/Users/adittama/inkwell.db` dengan timestamp ISO 8601 UTC
+- Print log ke stdout saat startup: `Inkwell daemon started → /Users/adittama/inkwell.db`
 
 ---
 
-## macOS permissions yang dibutuhkan
+## Spec: diary.py
 
-- Input Monitoring — wajib untuk CGEventTap keyboard capture
-- Tidak butuh Screen Recording, tidak butuh Accessibility, tidak butuh Microphone
+Path: `src/inkwell/diary.py`
 
-Buka via:
+Yang harus dilakukan:
+
+- Baca tabel `keystrokes` dari `/Users/adittama/inkwell.db` urut ascending
+- Group jadi sesi: gap lebih dari 120 detik di app yang sama = sesi baru
+- Concatenate `key_char` per sesi jadi satu string
+- Skip sesi yang setelah di-strip panjangnya kurang dari 5 karakter
+- Timestamp ditampilkan dalam local time via `.astimezone()` (bukan UTC)
+- Format output per sesi:
+
+  ```
+  ## 2026-06-24 14:32 — Arc · Claude
+
+  apa yang diketik di sini...
+
+  ---
+  ```
+
+- Tulis ke `/Users/adittama/Desktop/writing-history.md`
+- Urut terbaru di atas
+- Print: `Done. N sessions written to /Users/adittama/Desktop/writing-history.md`
+
+---
+
+## Spec: scripts/inkwell-diary.sh
+
+Path: `/Users/adittama/repos/inkwell/scripts/inkwell-diary.sh`
+
+```bash
+#!/bin/bash
+# @raycast.schemaVersion 1
+# @raycast.title Inkwell Diary
+# @raycast.mode silent
+
+cd /Users/adittama/repos/inkwell
+uv run src/inkwell/diary.py
+open /Users/adittama/Desktop/writing-history.md
+```
+
+Permission: chmod +x wajib setelah dibuat.
+
+---
+
+## Spec: com.inkwell.daemon.plist
+
+Path di repo: `/Users/adittama/repos/inkwell/com.inkwell.daemon.plist`
+Deploy ke: `/Users/adittama/Library/LaunchAgents/com.inkwell.daemon.plist`
+
+Key yang wajib ada:
+
+- Label: `com.inkwell.daemon`
+- ProgramArguments: path uv + `run` + `src/inkwell/daemon.py`
+- WorkingDirectory: `/Users/adittama/repos/inkwell`
+- RunAtLoad: true
+- KeepAlive: true
+- StandardOutPath: `/Users/adittama/Library/Logs/inkwell.log`
+- StandardErrorPath: `/Users/adittama/Library/Logs/inkwell-error.log`
+
+Path uv: cek dengan `which uv` sebelum hardcode. Biasanya `/opt/homebrew/bin/uv`.
+
+---
+
+## Permissions yang dibutuhkan
+
+Input Monitoring SAJA. Tidak perlu Screen Recording, Accessibility, Microphone.
+
 ```bash
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
 ```
 
+Tambahkan `uv` atau binary Python yang dipakai ke list, toggle ON.
+
 ---
 
-## Cara run (development)
+## Cara run development
 
 ```bash
-cd ~/repos/inkwell
+cd /Users/adittama/repos/inkwell
 uv run src/inkwell/daemon.py
 ```
 
-Cek data masuk:
-```bash
-sqlite3 ~/inkwell.db "SELECT timestamp, app_name, key_char FROM keystrokes ORDER BY timestamp DESC LIMIT 10;"
-```
+Ketik sesuatu, cek DB:
 
-Generate diary:
 ```bash
-uv run src/inkwell/diary.py
-# output: ~/Desktop/writing-history.md
+sqlite3 /Users/adittama/inkwell.db \
+  "SELECT timestamp, app_name, key_char FROM keystrokes ORDER BY timestamp DESC LIMIT 10;"
 ```
 
 ---
 
-## Cara deploy (production)
+## Cara deploy production
 
-Copy plist ke LaunchAgents, update path sesuai lokasi uv:
 ```bash
-cp com.inkwell.daemon.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist
-```
+# cek path uv dulu
+which uv
 
-Cek status:
-```bash
+# copy plist
+cp /Users/adittama/repos/inkwell/com.inkwell.daemon.plist \
+   /Users/adittama/Library/LaunchAgents/
+
+# load
+launchctl load /Users/adittama/Library/LaunchAgents/com.inkwell.daemon.plist
+
+# verifikasi (harus ada PID, bukan tanda minus)
 launchctl list | grep inkwell
-# kolom pertama harus PID angka, bukan tanda minus
 ```
 
 ---
 
-## Raycast integration
+## Raycast setup
 
-Hotkey: Hyperkey + Y
-Script: `scripts/inkwell-diary.sh`
-Mode: silent
-Aksi: jalankan diary.py lalu buka writing-history.md
-
----
-
-## Status saat ini
-
-- [ ] daemon.py — draft ada, belum pakai uv/pyproject.toml
-- [ ] diary.py — belum dibuat untuk Inkwell (masih versi screenpipe lama)
-- [ ] pyproject.toml — belum dibuat
-- [ ] LaunchAgent plist — belum dibuat
-- [ ] Raycast script — belum dibuat
-- [ ] README.md — belum dibuat
-
-Next step: scaffold pyproject.toml dan daemon.py dengan uv.
+1. Raycast Settings → Extensions → Script Commands → Add Directory
+2. Pilih `/Users/adittama/repos/inkwell/scripts`
+3. Command "Inkwell Diary" akan muncul
+4. Set hotkey: Hyperkey + Y
 
 ---
 
 ## Hal yang JANGAN dilakukan
 
-- Jangan pakai pip install manual atau venv manual, selalu pakai uv
-- Jangan pakai screenpipe atau Accessibility API untuk keyboard capture
-- Jangan simpan password, API key, atau konten dari password manager (Secure Keyboard Entry otomatis block CGEventTap, tapi tetap perlu diingat)
-- Jangan intercept/swallow events, selalu listen only
+- Jangan pakai pip atau venv, selalu uv
+- Jangan cari file source di luar `/Users/adittama/repos/inkwell/` — semua dibuat dari scratch
+- Jangan swallow keyboard events, selalu listen-only
+- Jangan hardcode path uv tanpa cek `which uv` dulu
+- Jangan pakai relative path di plist atau Raycast script
+
+---
+
+## Next step
+
+Buat file-file ini secara berurutan:
+
+1. `src/inkwell/__init__.py` (kosong)
+2. `src/inkwell/daemon.py`
+3. `src/inkwell/diary.py`
+4. `scripts/inkwell-diary.sh`
+5. `com.inkwell.daemon.plist`
+
+Setelah semua file ada, commit dan push ke GitHub.
