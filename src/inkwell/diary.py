@@ -2,7 +2,7 @@ import os
 import sys
 import sqlite3
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 DB_PATH = "/Users/adittama/inkwell.db"
 OUTPUT_PATH = "/Users/adittama/Desktop/writing-history.md"
@@ -129,7 +129,11 @@ def read_sessions():
     cursor = conn.cursor()
     
     try:
-        cursor.execute("SELECT timestamp, app_name, key_char FROM keystrokes ORDER BY timestamp ASC")
+        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        cursor.execute(
+            "SELECT timestamp, app_name, key_char FROM keystrokes WHERE timestamp >= ? ORDER BY timestamp ASC",
+            (seven_days_ago,)
+        )
         rows = cursor.fetchall()
     except sqlite3.OperationalError as e:
         print(f"Database error: {e}")
