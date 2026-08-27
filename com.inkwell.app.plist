@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.inkwell.app</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/uv</string>
+        <string>run</string>
+        <string>inkwell</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Volumes/Meaw/Code Repositories/Tools Scripts I Made/inkwell-keystroke-to-file-logger</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/vincent/Library/Logs/inkwell-app.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/vincent/Library/Logs/inkwell-app-error.log</string>
+</dict>
+</plist>

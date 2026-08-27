@@ -21,6 +21,7 @@ from AppKit import (
     NSUserNotification,
     NSUserNotificationCenter,
     NSObject,
+    NSApplicationActivationPolicyAccessory,
 )
 from Foundation import NSTimer
 from inkwell.diary import export_desktop_diary, export_to_obsidian_keylog, OUTPUT_PATH, DB_PATH
@@ -81,6 +82,7 @@ class InkwellApp(NSObject):
         conn.close()
 
     def applicationDidFinishLaunching_(self, notification):
+        NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
         # Create status item
         self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
         self.update_menu()
