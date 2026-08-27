@@ -1,8 +1,8 @@
 import os
 import sys
 import json
+import time
 import sqlite3
-import threading
 from datetime import datetime, timezone, timedelta
 import objc
 import Quartz
@@ -62,6 +62,7 @@ class InkwellApp(NSObject):
         self.is_paused = self.config.get("paused", False)
         self.tap = None
         self.status_item = None
+        self.permission_prompted = False
         self.init_db()
         return self
 
@@ -86,9 +87,6 @@ class InkwellApp(NSObject):
         # Create status item
         self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
         self.update_menu()
-
-        # Start keylogger in background thread
-        threading.Thread(target=self.start_event_tap, daemon=True).start()
 
     def update_menu(self):
         if not self.status_item:
@@ -310,26 +308,47 @@ class InkwellApp(NSObject):
         return event
 
     def start_event_tap(self):
+        # Run synchronously on the MAIN thread. The tap's run-loop source is
+        # attached to the main run loop, which NSApplication.run() already
+        # pumps — so the callback fires reliably (a separate background-thread
+        # run loop proved unreliable once the app's main run loop is active).
         event_mask = (1 << Quartz.kCGEventKeyDown)
-        
+
         def cb(proxy, evt_type, evt, refcon):
             return self.keyboard_callback(proxy, evt_type, evt, refcon)
 
-        self.tap = Quartz.CGEventTapCreate(
-            Quartz.kCGSessionEventTap,
-            Quartz.kCGTailAppendEventTap,
-            Quartz.kCGEventTapOptionListenOnly,
-            event_mask,
-            cb,
-            None
-        )
+        # Retry until the tap can be created. macOS adds this binary to the
+        # Input Monitoring list only after the first failed attempt, and the
+        # user may grant it while the app is already running — so we keep
+        # trying instead of giving up on the first failure.
+        while True:
+            self.tap = Quartz.CGEventTapCreate(
+                Quartz.kCGSessionEventTap,
+                Quartz.kCGTailAppendEventTap,
+                Quartz.kCGEventTapOptionListenOnly,
+                event_mask,
+                cb,
+                None
+            )
+            if self.tap:
+                break
 
-        if not self.tap:
-            print("Error: CGEventTapCreate failed. The binary running this process is not "
-                  "authorized in System Settings → Privacy & Security → Input Monitoring.", file=sys.stderr)
-            print(f"Offending executable (must be added to Input Monitoring): {sys.executable}", file=sys.stderr)
-            self._request_input_monitoring_permission()
-            return
+            if not self.permission_prompted:
+                print("Error: CGEventTapCreate failed. The binary running this process is not "
+                      "authorized in System Settings → Privacy & Security → Input Monitoring.",
+                      file=sys.stderr)
+                print(f"Offending executable (must be added to Input Monitoring): {sys.executable}",
+                      file=sys.stderr)
+                self._request_input_monitoring_permission()
+                self.permission_prompted = True
+
+            print("Input Monitoring not granted yet — retrying in 5s...", file=sys.stderr)
+            time.sleep(5)
+
+        run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, self.tap, 0)
+        Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetMain(), run_loop_source, Quartz.kCFRunLoopCommonModes)
+        Quartz.CGEventTapEnable(self.tap, True)
+        print("Inkwell event tap active.", file=sys.stderr)
 
     def _request_input_monitoring_permission(self):
         try:
@@ -337,7 +356,7 @@ class InkwellApp(NSObject):
             notify(
                 "Inkwell needs Input Monitoring",
                 "Open System Settings → Privacy & Security → Input Monitoring, enable the "
-                "python3 binary, then Quit & relaunch Inkwell."
+                "python3 binary, then it will start capturing automatically."
             )
             # Open the Input Monitoring privacy pane
             NSWorkspace.sharedWorkspace().openURL_(
@@ -351,15 +370,13 @@ class InkwellApp(NSObject):
         except Exception as e:
             print(f"Permission helper error: {e}", file=sys.stderr)
 
-        run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, self.tap, 0)
-        Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetCurrent(), run_loop_source, Quartz.kCFRunLoopCommonModes)
-        Quartz.CGEventTapEnable(self.tap, True)
-        Quartz.CFRunLoopRun()
-
 def main():
     app = NSApplication.sharedApplication()
     delegate = InkwellApp.alloc().init()
     app.setDelegate_(delegate)
+    # Create the event tap on the main thread and attach it to the main run
+    # loop. This must happen before app.run() so the tap is live immediately.
+    delegate.start_event_tap()
     app.run()
 
 if __name__ == "__main__":
