@@ -6,17 +6,19 @@
     <string>com.inkwell.daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/adittama/repositories/Inkwell/dist/inkwell-daemon.app/Contents/MacOS/inkwell-daemon</string>
+        <string>/opt/homebrew/bin/uv</string>
+        <string>run</string>
+        <string>src/inkwell/daemon.py</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/adittama/repositories/Inkwell</string>
+    <string>/Volumes/Meaw/Code Repositories/Tools Scripts I Made/inkwell-keystroke-to-file-logger</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/adittama/Library/Logs/inkwell.log</string>
+    <string>/Users/vincent/Library/Logs/inkwell.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/adittama/Library/Logs/inkwell-error.log</string>
+    <string>/Users/vincent/Library/Logs/inkwell-error.log</string>
 </dict>
 </plist>

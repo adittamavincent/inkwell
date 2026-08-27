@@ -3,7 +3,7 @@ import sqlite3
 import os
 from datetime import datetime, timedelta, timezone
 
-DB_PATH = "/Users/adittama/inkwell.db"
+DB_PATH = os.path.expanduser("~/inkwell.db")
 
 def main():
     days = 30

@@ -4,8 +4,9 @@ import sqlite3
 import re
 from datetime import datetime, timedelta, timezone
 
-DB_PATH = "/Users/adittama/inkwell.db"
-OUTPUT_PATH = "/Users/adittama/Desktop/writing-history.md"
+DB_PATH = os.path.expanduser("~/inkwell.db")
+OUTPUT_PATH = os.path.expanduser("~/Desktop/writing-history.md")
+BOUNDARY_MARKER = "<!-- LOG-BELOW — external tools may only append below this line -->"
 
 def delete_selection(buffer, sel):
     start, end = min(sel), max(sel)
@@ -119,9 +120,8 @@ def reconstruct_text(chars: list[str]) -> tuple[str, bool]:
 
     return "".join(buffer), contains_undo
 
-def read_sessions():
+def read_sessions(days: int = 7, target_date_str: str | None = None) -> list[dict]:
     if not os.path.exists(DB_PATH):
-        print(f"Database not found at {DB_PATH}")
         return []
 
     conn = sqlite3.connect(DB_PATH)
@@ -129,11 +129,17 @@ def read_sessions():
     cursor = conn.cursor()
     
     try:
-        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-        cursor.execute(
-            "SELECT timestamp, app_name, key_char FROM keystrokes WHERE timestamp >= ? ORDER BY timestamp ASC",
-            (seven_days_ago,)
-        )
+        if target_date_str:
+            # Filter specifically for target date (e.g. YYYY-MM-DD in local time)
+            cursor.execute(
+                "SELECT timestamp, app_name, key_char FROM keystrokes ORDER BY timestamp ASC"
+            )
+        else:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            cursor.execute(
+                "SELECT timestamp, app_name, key_char FROM keystrokes WHERE timestamp >= ? ORDER BY timestamp ASC",
+                (cutoff,)
+            )
         rows = cursor.fetchall()
     except sqlite3.OperationalError as e:
         print(f"Database error: {e}")
@@ -153,6 +159,11 @@ def read_sessions():
             dt = datetime.fromisoformat(ts_str)
         except Exception:
             continue
+
+        if target_date_str:
+            local_date = dt.astimezone().strftime("%Y-%m-%d")
+            if local_date != target_date_str:
+                continue
 
         if current_session is None:
             current_session = {
@@ -178,46 +189,85 @@ def read_sessions():
 
     return sessions
 
-def main():
-    sessions = read_sessions()
+def generate_diary_blocks(sessions: list[dict], min_chars: int = 5) -> list[tuple[datetime, str]]:
     blocks = []
-
     for session in sessions:
         text, contains_undo = reconstruct_text(session['chars'])
         cleaned_text = text.strip()
         
-        # Filter sessions that don't contain at least 1 alphanumeric/special char
         if not bool(re.search(r'[a-zA-Z0-9\u00C0-\u024F]', text)):
             continue
 
-        # Skip sessions with content less than 5 characters after strip
-        if len(cleaned_text) < 5:
+        if len(cleaned_text) < min_chars:
             continue
 
         local_dt = session['start_time'].astimezone()
         time_str = local_dt.strftime("%Y-%m-%d %H:%M")
         
         app_name = session['app_name']
-        undo_warning = "> ⚠️ sesi ini mengandung Undo, hasil rekonstruksi mungkin tidak akurat\n\n" if contains_undo else ""
+        undo_warning = "> ⚠️ *Session contains Undo, reconstructed text may be approximate*\n\n" if contains_undo else ""
         block_text = f"## {time_str} — {app_name}\n\n{undo_warning}{cleaned_text}\n\n---"
         blocks.append((session['start_time'], block_text))
+    return blocks
 
+def export_desktop_diary(days: int = 7, output_path: str = OUTPUT_PATH) -> int:
+    sessions = read_sessions(days=days)
+    blocks = generate_diary_blocks(sessions)
     blocks.sort(key=lambda x: x[0], reverse=True)
 
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     if not blocks:
-        print("No sessions to write.")
-        with open(OUTPUT_PATH, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write("")
-        print(f"Done. 0 sessions written to {OUTPUT_PATH}")
-        return
+        return 0
 
-    output_content = "\n\n".join(b[1] for b in blocks) + "\n"
+    content = "\n\n".join(b[1] for b in blocks) + "\n"
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return len(blocks)
+
+def export_to_obsidian_keylog(vault_path: str, date_str: str | None = None) -> tuple[bool, str]:
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
     
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
-        f.write(output_content)
+    # Path inside Obsidian vault: Daily/YYYY-MM-DD/YYYY-MM-DD - keylog.md
+    day_folder = os.path.join(vault_path, "Daily", date_str)
+    keylog_file = os.path.join(day_folder, f"{date_str} - keylog.md")
 
-    print(f"Done. {len(blocks)} sessions written to {OUTPUT_PATH}")
+    sessions = read_sessions(target_date_str=date_str)
+    blocks = generate_diary_blocks(sessions)
+    # Order chronological for daily note
+    blocks.sort(key=lambda x: x[0])
+
+    if not blocks:
+        return True, "No typing sessions found for today."
+
+    os.makedirs(day_folder, exist_ok=True)
+    body = "\n\n".join(b[1] for b in blocks) + "\n"
+
+    if os.path.exists(keylog_file):
+        with open(keylog_file, "r", encoding="utf-8") as f:
+            existing_content = f.read()
+
+        if BOUNDARY_MARKER not in existing_content:
+            new_content = f"{BOUNDARY_MARKER}\n\n{body}"
+        else:
+            # Preserve anything above boundary marker
+            parts = existing_content.split(BOUNDARY_MARKER, 1)
+            header = parts[0]
+            new_content = f"{header}{BOUNDARY_MARKER}\n\n{body}"
+
+        with open(keylog_file, "w", encoding="utf-8") as f:
+            f.write(new_content)
+    else:
+        with open(keylog_file, "w", encoding="utf-8") as f:
+            f.write(f"{BOUNDARY_MARKER}\n\n{body}")
+
+    return True, f"Successfully synced {len(blocks)} sessions to {keylog_file}"
+
+def main():
+    count = export_desktop_diary()
+    print(f"Done. {count} sessions written to {OUTPUT_PATH}")
 
 if __name__ == "__main__":
     main()

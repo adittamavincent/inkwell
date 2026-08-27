@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import Quartz
 from AppKit import NSWorkspace
 
-DB_PATH = "/Users/adittama/inkwell.db"
+DB_PATH = os.path.expanduser("~/inkwell.db")
 tap = None
 
 def init_db():

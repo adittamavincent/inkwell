@@ -1,101 +1,73 @@
-# Inkwell
+# Inkwell 🖋️
 
-macOS keystroke daemon. CGEventTap capture, SQLite storage, diary generation.
+> **Ambient Keystroke & Writing Journal for macOS**
+
+Inkwell captures your typing flow across macOS applications in the background, reconstructs your editing sessions into clean prose, and exports ambient writing diaries directly to your Desktop or your **Obsidian** daily hub notes (paired seamlessly with the [Cogdex](https://github.com/adittamavincent/cogdex-vault-companion) plugin).
+
+---
+
+## Features
+
+- **🖋️ Menu Bar Status App**: Sits quietly in your macOS top menu bar. Live recording status, one-click pause/resume, and direct export actions.
+- **⚡ System-Wide Capture**: Powered by macOS `CGEventTap` (Quartz/Cocoa) to log keystrokes seamlessly across Chrome, Cursor, Slack, WhatsApp, Terminal, and Obsidian.
+- **🧠 Smart Text Reconstruction**: Intelligently models backspaces, deletions, word erasures (`⌥⌫`), line clears (`⌘⌫`), and select-all replacements (`⌘A`) into readable paragraphs.
+- **📓 Desktop Diary Export**: Export 7-day writing history to `~/Desktop/writing-history.md`.
+- **💎 Obsidian / Cogdex Integration**: One-click sync to your active Obsidian vault under `Daily/YYYY-MM-DD/YYYY-MM-DD - keylog.md` below the `<!-- LOG-BELOW -->` boundary.
+- **🔒 Privacy First**: Everything stays 100% offline in your local SQLite database (`~/inkwell.db`). No cloud telemetry.
 
 ---
 
 ## Quick Start
 
 ### 1. Prerequisites
-- macOS Tahoe 26+
-- `uv` installed (via Homebrew)
-- GitHub CLI `gh` (optional, for remote setup)
+- macOS 12+
+- `uv` installed (`brew install uv`)
+- Python 3.11+
 
-### 2. Grant Permissions
-EventTap requires **Input Monitoring** permissions.
-1. Open System Settings:
-   ```bash
-   open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-   ```
-2. Add the permission target:
-   - For development: Add your terminal application (e.g., Terminal, Alacritty).
-   - For LaunchAgent daemon: Add the compiled app bundle `/Users/adittama/repositories/Inkwell/dist/inkwell-daemon.app`.
-3. Toggle the checkmark ON.
+### 2. Permissions
+`CGEventTap` requires macOS **Input Monitoring** permissions:
+1. Open **System Settings → Privacy & Security → Input Monitoring**.
+2. Add your Terminal application or the compiled `Inkwell.app`.
+3. Ensure the toggle is switched **ON**.
+
+### 3. Run the Menu Bar App
+```bash
+uv run inkwell
+```
+You will see the 🖋️ icon appear in your macOS menu bar!
 
 ---
 
-## Development
+## Menu Bar Actions
 
-### 1. Run Daemon
-Start logging keystrokes:
-```bash
-uv run src/inkwell/daemon.py
-```
-*Keys are logged to `/Users/adittama/inkwell.db`.*
-
-### 2. Query Database
-```bash
-sqlite3 ~/inkwell.db "SELECT timestamp, app_name, key_char FROM keystrokes ORDER BY timestamp DESC LIMIT 10;"
-```
-
-### 3. Generate Diary
-Export session diary (last 7 days only) to `~/Desktop/writing-history.md`:
-```bash
-uv run src/inkwell/diary.py
-```
-
-### 4. Clean Database
-Prune old database records (e.g., older than 30 days) and vacuum:
-```bash
-uv run src/inkwell/clean.py 30
-```
-*(Also available in Raycast as "Inkwell Clean DB" script command)*
-
-### 5. Build App Bundle
-Compile the daemon script into a standalone macOS `.app` bundle:
-```bash
-uv run --with pyinstaller pyinstaller --windowed --name inkwell-daemon src/inkwell/daemon.py
-```
+- **● Logging Active / ⏸ Paused**: View current recording state.
+- **Pause / Resume Recording**: Temporarily halt keylogging during private sessions.
+- **Generate Diary (Desktop)**: Export and open `~/Desktop/writing-history.md`.
+- **Sync to Obsidian Keylog**: Automatically format and append today's typing history to your configured Obsidian vault note.
+- **Set Obsidian Vault Path...**: Native folder picker to configure your Obsidian vault root directory.
+- **Clean Database...**: Prune records older than 30 days and vacuum SQLite.
+- **Reveal inkwell.db in Finder**: Quick access to your database file.
 
 ---
 
-## Production Deployment (LaunchAgent)
+## Companion Obsidian Plugin
 
-1. Deploy plist:
-   ```bash
-   cp com.inkwell.daemon.plist ~/Library/LaunchAgents/
-   ```
-2. Load agent (unload first if already loaded to avoid error 5):
-   ```bash
-   launchctl unload ~/Library/LaunchAgents/com.inkwell.daemon.plist 2>/dev/null
-   launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist
-   ```
-3. Check status (should display PID):
-   ```bash
-   launchctl list | grep inkwell
-   ```
-4. View logs:
-   - Stdout: `~/Library/Logs/inkwell.log`
-   - Stderr: `~/Library/Logs/inkwell-error.log`
+Inkwell pairs seamlessly with **[Cogdex Vault Companion](https://github.com/adittamavincent/cogdex-vault-companion)** for Obsidian:
+- In Obsidian Settings → **Cogdex Vault Companion** → Enable **Inkwell Companion App Sync**.
+- Obsidian will automatically and continuously ingest ambient keystrokes logged by Inkwell without needing manual export.
 
 ---
 
-## Raycast Setup
+## Building Standalone macOS App Bundle
 
-1. Open Raycast Settings → Extensions → Script Commands.
-2. Click **Add Directory**, choose `/Users/adittama/repositories/Inkwell/scripts`.
-3. Trigger "Inkwell Diary" via hotkey (e.g. Hyperkey + Y).
-
----
-
-## How to Update
-
-To update the codebase and restart the daemon:
+To compile Inkwell into a native `.app`:
 ```bash
-git pull
-# Rebuild binary
-uv run --with pyinstaller pyinstaller --windowed --name inkwell-daemon src/inkwell/daemon.py
-# Reload LaunchAgent to apply changes
-launchctl unload ~/Library/LaunchAgents/com.inkwell.daemon.plist 2>/dev/null
-launchctl load ~/Library/LaunchAgents/com.inkwell.daemon.plist
+uv run --with pyinstaller pyinstaller --windowed --name Inkwell src/inkwell/app.py
 ```
+Move `dist/Inkwell.app` to `/Applications` or your User Applications folder.
+
+---
+
+## License
+
+MIT License

@@ -4,5 +4,6 @@
 # @raycast.mode compact
 # @raycast.argument1 { "type": "text", "placeholder": "days (default 30)", "optional": true }
 
-cd /Users/adittama/repositories/Inkwell
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$DIR"
 /opt/homebrew/bin/uv run src/inkwell/clean.py "$1"
