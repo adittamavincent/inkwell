@@ -1,0 +1,32 @@
+{
+  "$schema": "https://tauri.studio/schema.json",
+  "package": {
+    "productName": "Inkwell",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "bundle": {
+      "identifier": "com.inkwell.app",
+      "icon": ["icons/icon.icns"],
+      "resources": [],
+      "active": true,
+      "targets": ["dmg"],
+      "macOS": {
+        "category": "public.app-category.utilities",
+        "signingIdentity": null,
+        "exceptionDomain": null,
+        "entitlements": null,
+        "entitlementsInherit": null,
+        "minimumSystemVersion": "11.0"
+      }
+    },
+    "windows": [],
+    "linux": {}
+  },
+  "build": {
+    "beforeDevCommand": "pnpm run dev",
+    "beforeBuildCommand": "pnpm run build",
+    "devPath": "../frontend/dist",
+    "distDir": "../frontend/dist"
+  }
+}
