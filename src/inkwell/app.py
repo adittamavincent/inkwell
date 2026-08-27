@@ -3,7 +3,7 @@ import sys
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import Quartz
 from AppKit import (
     NSApplication,

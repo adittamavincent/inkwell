@@ -6,4 +6,10 @@
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
-/opt/homebrew/bin/uv run src/inkwell/clean.py "$1"
+
+UV_BIN="$(command -v uv || which uv || echo "/opt/homebrew/bin/uv")"
+if [ ! -x "$UV_BIN" ] && [ -f "$HOME/.cargo/bin/uv" ]; then
+    UV_BIN="$HOME/.cargo/bin/uv"
+fi
+
+"$UV_BIN" run src/inkwell/clean.py "$1"

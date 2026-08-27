@@ -36,6 +36,16 @@ uv run inkwell
 ```
 You will see the 🖋️ icon appear in your macOS menu bar!
 
+### 4. Run Headless as Background Daemon (Optional)
+If you prefer running Inkwell continuously in the background on startup without keeping a terminal open:
+```bash
+./scripts/install-daemon.sh
+```
+To stop/uninstall the daemon:
+```bash
+./scripts/uninstall-daemon.sh
+```
+
 ---
 
 ## Menu Bar Actions
@@ -53,7 +63,7 @@ You will see the 🖋️ icon appear in your macOS menu bar!
 ## Companion Obsidian Plugin
 
 Inkwell pairs seamlessly with **[Cogdex Vault Companion](https://github.com/adittamavincent/cogdex-vault-companion)** for Obsidian:
-- In Obsidian Settings → **Cogdex Vault Companion** → Enable **Inkwell Companion App Sync**.
+- In Obsidian Settings → **Cogdex Vault Companion** → Enable **Inkwell companion app sync**.
 - Obsidian will automatically and continuously ingest ambient keystrokes logged by Inkwell without needing manual export.
 
 ---
