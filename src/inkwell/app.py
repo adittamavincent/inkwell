@@ -63,6 +63,7 @@ class InkwellApp(NSObject):
         self.tap = None
         self.status_item = None
         self.permission_prompted = False
+        self.obsidian_timer = None
         self.init_db()
         return self
 
@@ -236,8 +237,34 @@ class InkwellApp(NSObject):
             )
             conn.commit()
             conn.close()
+            # Debounced auto-sync to Obsidian: every keystroke resets a 5s
+            # timer, so the vault is updated ~5s after typing stops.
+            self._schedule_obsidian_sync()
         except Exception as e:
             print(f"Error logging keystroke: {e}", file=sys.stderr)
+
+    OBSIDIAN_SYNC_DELAY = 5.0
+
+    def _schedule_obsidian_sync(self):
+        if self.is_paused or not self.config.get("vault_path"):
+            return
+        if self.obsidian_timer is not None:
+            self.obsidian_timer.invalidate()
+            self.obsidian_timer = None
+        self.obsidian_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            self.OBSIDIAN_SYNC_DELAY, self, "autoSyncObsidian:", None, False
+        )
+
+    def autoSyncObsidian_(self, timer):
+        self.obsidian_timer = None
+        if self.is_paused or not self.config.get("vault_path"):
+            return
+        try:
+            success, msg = export_to_obsidian_keylog(self.config["vault_path"])
+            if not success:
+                print(f"Obsidian auto-sync: {msg}", file=sys.stderr)
+        except Exception as e:
+            print(f"Obsidian auto-sync error: {e}", file=sys.stderr)
 
     def get_key_char(self, event, key_code: int) -> str:
         flags = Quartz.CGEventGetFlags(event)
