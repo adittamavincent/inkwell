@@ -4,6 +4,7 @@ import json
 import sqlite3
 import threading
 from datetime import datetime, timezone, timedelta
+import objc
 import Quartz
 from AppKit import (
     NSApplication,
@@ -53,7 +54,7 @@ def notify(title: str, text: str):
 
 class InkwellApp(NSObject):
     def init(self):
-        self = super().init()
+        self = objc.super(InkwellApp, self).init()
         if self is None:
             return None
         self.config = load_config()
