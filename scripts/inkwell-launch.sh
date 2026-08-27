@@ -4,25 +4,30 @@
 # @raycast.mode silent
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$DIR"
+PLIST_SRC="$DIR/com.inkwell.app.plist"
+PLIST_DST="$HOME/Library/LaunchAgents/com.inkwell.app.plist"
+LOG_DIR="$HOME/Library/Logs"
+mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
 
-UV_BIN="$(command -v uv || which uv || echo "/opt/homebrew/bin/uv")"
-if [ ! -x "$UV_BIN" ] && [ -f "$HOME/.cargo/bin/uv" ]; then
-    UV_BIN="$HOME/.cargo/bin/uv"
+# Always refresh the installed plist from the repo copy
+cp "$PLIST_SRC" "$PLIST_DST"
+
+UID_NUM="$(id -u)"
+
+# Load the agent into launchd if it isn't loaded yet.
+if ! launchctl list 2>/dev/null | grep -q "com.inkwell.app"; then
+    launchctl load "$PLIST_DST" 2>/dev/null || true
 fi
 
-PID_FILE="$HOME/.inkwell_app.pid"
-LOG_FILE="$HOME/Library/Logs/inkwell.log"
-mkdir -p "$HOME/Library/Logs"
-
-if [ -f "$PID_FILE" ]; then
-    PID="$(cat "$PID_FILE")"
-    if ps -p "$PID" > /dev/null 2>&1; then
-        echo "Inkwell is already running (PID: $PID)."
-        exit 0
-    fi
+# (Re)start it under launchd. This makes the process a child of launchd,
+# NOT of this terminal — so closing the terminal can never kill it.
+if launchctl kickstart -k "gui/$UID_NUM/com.inkwell.app" 2>/dev/null; then
+    :
+elif launchctl start com.inkwell.app 2>/dev/null; then
+    :
+else
+    echo "Inkwell failed to start — check $LOG_DIR/inkwell-app-error.log"
+    exit 1
 fi
 
-nohup "$UV_BIN" run inkwell >> "$LOG_FILE" 2>&1 &
-echo "$!" > "$PID_FILE"
-echo "Inkwell started. Check the Menu Bar!"
+echo "Inkwell launched via launchd. You can safely close this terminal — it keeps running."
