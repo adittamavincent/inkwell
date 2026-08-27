@@ -23,7 +23,7 @@ from AppKit import (
     NSObject,
     NSApplicationActivationPolicyAccessory,
 )
-from Foundation import NSTimer
+from Foundation import NSTimer, NSURL
 from inkwell.diary import export_desktop_diary, export_to_obsidian_keylog, OUTPUT_PATH, DB_PATH
 
 CONFIG_PATH = os.path.expanduser("~/.inkwell_config.json")
@@ -325,8 +325,31 @@ class InkwellApp(NSObject):
         )
 
         if not self.tap:
-            print("Error: CGEventTapCreate failed. Please check macOS Input Monitoring permissions.", file=sys.stderr)
+            print("Error: CGEventTapCreate failed. The binary running this process is not "
+                  "authorized in System Settings → Privacy & Security → Input Monitoring.", file=sys.stderr)
+            print(f"Offending executable (must be added to Input Monitoring): {sys.executable}", file=sys.stderr)
+            self._request_input_monitoring_permission()
             return
+
+    def _request_input_monitoring_permission(self):
+        try:
+            exe = sys.executable
+            notify(
+                "Inkwell needs Input Monitoring",
+                "Open System Settings → Privacy & Security → Input Monitoring, enable the "
+                "python3 binary, then Quit & relaunch Inkwell."
+            )
+            # Open the Input Monitoring privacy pane
+            NSWorkspace.sharedWorkspace().openURL_(
+                Foundation.NSURL.URLWithString_(
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+                )
+            )
+            # Reveal the exact executable in Finder so it can be dragged in if missing
+            parent = os.path.dirname(exe)
+            NSWorkspace.sharedWorkspace().selectFile_inFileViewerRootedAtPath_(exe, parent)
+        except Exception as e:
+            print(f"Permission helper error: {e}", file=sys.stderr)
 
         run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, self.tap, 0)
         Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetCurrent(), run_loop_source, Quartz.kCFRunLoopCommonModes)
