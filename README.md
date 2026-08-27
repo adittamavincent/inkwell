@@ -1,8 +1,8 @@
-# Inkwell Keystroke‑to‑File Logger 🖋️
+# Inkwell – System‑wide Keystroke Logger for Obsidian 🖋️
 
-> **A lightweight macOS utility that captures your keystrokes and writes them directly into an Obsidian note**
-
-The Inkwell keystroke‑to‑file logger runs as a background Tauri app. It records everything you type system‑wide (Chrome, Terminal, Slack, etc.) and streams the reconstructed text into a daily *keylog* note in your Obsidian vault. This complements the **Cogdex Vault Companion** plugin, giving you a complete provenance‑aware workflow.
+> **A lightweight macOS utility that captures your keystrokes and writes them directly into an Obsidian note.**
+>
+> The Inkwell logger runs independently as a background Tauri app. It records keystrokes system‑wide (Chrome, Terminal, Slack, etc.) and appends them to a daily *keylog* note in your Obsidian vault. Integration with **Cogdex Vault Companion** is optional and can be enabled via Cogdex’s settings.
 
 ---
 
