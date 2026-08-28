@@ -1,26 +1,49 @@
 // src/keystroke.rs
-// Minimal CGEventTap wrapper for macOS key logging.
-// This mirrors the mapping logic from daemon.py but is simplified.
+// macOS system-wide key logger built on a CoreGraphics event tap.
+//
+// Uses the modern `core-graphics` 0.24 `CGEventTap` API, which exposes a Rust
+// closure callback (no manual `extern "C"` plumbing) and owns the underlying
+// `CFMachPort`. Captured keystrokes are stored in SQLite via `db`; the optional
+// Cogdex sync (which turns those rows into markdown sessions appended below the
+// `LOG-BELOW` boundary) lives in `sync.rs`.
 
-use core_graphics::event::{CGEvent, CGEventType, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapCreate, CGEventTapEnable};
-use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-use core_graphics::event::{CGEventFlags, CGKeyCode};
-use core_foundation::runloop::{CFRunLoop, CFRunLoopAddSource, CFRunLoopRun, CFRunLoopSource, CFRunLoopSourceContext};
+use chrono::Utc;
+use core_foundation::runloop::{CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode};
+use core_graphics::event::{
+    CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
+    CGEventType, CGKeyCode, EventField,
+};
+use core_graphics::sys::CGEventRef;
+use foreign_types::ForeignType;
+use std::os::raw::c_ulong;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use log::{info, error};
+use log::{error, info};
+
 use crate::db;
+
+// Layout-aware character extraction is not exposed as a method on `CGEvent` in
+// `core-graphics`, so we call the underlying framework function directly.
+extern "C" {
+    fn CGEventKeyboardGetUnicodeString(
+        event: CGEventRef,
+        max_string_length: c_ulong,
+        out_string_length: *mut c_ulong,
+        unicode_string: *mut u16,
+    );
+}
 
 #[derive(Clone)]
 pub struct KeystrokeLogger {
-    // Store shared state such as running flag.
-    running: Arc<Mutex<bool>>,    
+    running: Arc<Mutex<bool>>,
 }
 
 impl KeystrokeLogger {
     pub fn new() -> Self {
-        Self { running: Arc::new(Mutex::new(false)) }
+        Self {
+            running: Arc::new(Mutex::new(false)),
+        }
     }
 
     pub fn start(&self) {
@@ -31,35 +54,78 @@ impl KeystrokeLogger {
         }
         *running = true;
         let running_flag = self.running.clone();
+
         thread::spawn(move || {
-            // Create event tap
-            unsafe {
-                let tap = CGEventTapCreate(
-                    CGEventTapLocation::HID,
-                    CGEventTapPlacement::HeadInsertEventTap,
-                    CGEventTapOptions::ListenOnly,
-                    CGEventMask::new(1 << CGEventType::KeyDown as u64),
-                    callback,
-                    std::ptr::null_mut(),
-                );
-                if tap.is_null() {
-                    error!("Failed to create CGEventTap");
+            // ListenOnly => a passive tap that never consumes/modifies events.
+            let tap = match CGEventTap::new(
+                CGEventTapLocation::HID,
+                CGEventTapPlacement::HeadInsertEventTap,
+                CGEventTapOptions::ListenOnly,
+                vec![CGEventType::KeyDown],
+                |_proxy, type_, event| {
+                    if type_ as u32 == CGEventType::KeyDown as u32 {
+                        let key_code: CGKeyCode = event
+                            .get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE)
+                            as CGKeyCode;
+                        let chars = unsafe { event_characters(event) };
+                        let key_char = match map_key(key_code) {
+                            Some(token) => token,
+                            None => {
+                                if chars.is_empty() {
+                                    return None;
+                                }
+                                chars
+                            }
+                        };
+                        if key_char.is_empty() {
+                            return None;
+                        }
+                        // TODO: real frontmost-app detection (requires the
+                        // `objc` + AppKit `NSWorkspace` frontmostApplication).
+                        let app_name = "Unknown".to_string();
+                        let timestamp = Utc::now().to_rfc3339();
+                        let _ = db::insert_keystroke(
+                            &timestamp,
+                            &app_name,
+                            &key_char,
+                            key_code as i64,
+                        );
+                    }
+                    None
+                },
+            ) {
+                Ok(t) => t,
+                Err(_) => {
+                    error!(
+                        "Failed to create CGEventTap. Did the user grant \
+                         Input Monitoring / Accessibility permission in System Settings?"
+                    );
+                    *running_flag.lock().unwrap() = false;
                     return;
                 }
-                CGEventTapEnable(tap, true);
-                let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
-                let rl = CFRunLoop::get_current();
-                let src = CFRunLoopSource::new(&CFRunLoopSourceContext::new(&source), 0);
-                CFRunLoopAddSource(&rl, &src, kCFRunLoopCommonModes);
-                // Run loop until stopped
-                while *running_flag.lock().unwrap() {
-                    CFRunLoopRun(); // will block; in real code we'd integrate properly
-                    thread::sleep(Duration::from_millis(100));
+            };
+
+            let run_loop = CFRunLoop::get_current();
+            match tap.mach_port.create_runloop_source(0) {
+                Ok(source) => run_loop.add_source(&source, unsafe { kCFRunLoopCommonModes }),
+                Err(_) => {
+                    error!("Failed to create run loop source for the event tap");
+                    *running_flag.lock().unwrap() = false;
+                    return;
                 }
-                // Cleanup
-                CGEventTapEnable(tap, false);
-                info!("Keystroke tap stopped");
             }
+            tap.enable();
+
+            // Poll the run loop in short slices so `stop()` can break out
+            // promptly without blocking the thread forever in CFRunLoopRun().
+            while *running_flag.lock().unwrap() {
+                CFRunLoop::run_in_mode(
+                    unsafe { kCFRunLoopDefaultMode },
+                    Duration::from_millis(200),
+                    false,
+                );
+            }
+            info!("Keystroke tap stopped");
         });
     }
 
@@ -69,43 +135,37 @@ impl KeystrokeLogger {
     }
 }
 
-// Callback for each key down event.
-unsafe extern "C" fn callback(proxy: CGEventTapProxy, type_: CGEventType, event: CGEvent, _refcon: *mut std::ffi::c_void) -> CGEvent {
-    if type_ == CGEventType::KeyDown {
-        let key_code: CGKeyCode = event.get_integer_value_field(core_graphics::event::CGEventField::KeyboardEventKeycode);
-        let flags = event.get_flags();
-        // Map key_code to string; simplified version.
-        let key_char = map_key(key_code, flags);
-        // Get frontmost app name via AppKit (placeholder, omitted for brevity).
-        let app_name = "Unknown".to_string();
-        let timestamp = chrono::Utc::now().to_rfc3339();
-        // Insert into DB (ignore errors for demo).
-        let _ = db::insert_keystroke(&timestamp, &app_name, &key_char, key_code as i64);
+/// Extract the actual typed characters for an event, honouring the active
+/// keyboard layout (dead keys, diacritics, non-US layouts, etc.).
+unsafe fn event_characters(event: &CGEvent) -> String {
+    let mut buf = [0u16; 256];
+    let mut len: c_ulong = 0;
+    CGEventKeyboardGetUnicodeString(
+        event.as_ptr() as CGEventRef,
+        buf.len() as c_ulong,
+        &mut len,
+        buf.as_mut_ptr(),
+    );
+    if len == 0 {
+        return String::new();
     }
-    event
+    String::from_utf16_lossy(&buf[..len as usize])
 }
 
-fn map_key(key_code: CGKeyCode, flags: CGEventFlags) -> String {
-    // Basic mapping for printable characters and some special keys.
+/// Map layout-independent special keys to the same token vocabulary Cogdex's
+/// reconstructor understands (`[⌫]`, `[↵]`, ...). Printable characters are
+/// handled by `event_characters` instead.
+fn map_key(key_code: CGKeyCode) -> Option<String> {
     match key_code {
-        49 => " ".to_string(), // space
-        36 => "[↵]".to_string(), // return
-        51 => "[⌫]".to_string(), // backspace
-        117 => "[⌦]".to_string(), // forward delete
-        48 => "[⇥]".to_string(), // tab
-        53 => "[ESC]".to_string(), // escape
-        123 => "[←]".to_string(), // left arrow
-        124 => "[→]".to_string(), // right arrow
-        125 => "[↓]".to_string(), // down arrow
-        126 => "[↑]".to_string(), // up arrow
-        _ => {
-            // For alphanumeric, use Unicode scalar if shift not pressed.
-            let ch = (key_code as u8) as char;
-            if flags.contains(CGEventFlags::SHIFT) {
-                ch.to_ascii_uppercase().to_string()
-            } else {
-                ch.to_string()
-            }
-        }
+        36 => Some("[↵]".to_string()),  // Return
+        51 => Some("[⌫]".to_string()),  // Backspace (Delete backward)
+        117 => Some("[⌦]".to_string()), // Forward Delete
+        48 => Some("[⇥]".to_string()),  // Tab
+        123 => Some("[←]".to_string()), // Left arrow
+        124 => Some("[→]".to_string()), // Right arrow
+        125 => Some("[↓]".to_string()), // Down arrow
+        126 => Some("[↑]".to_string()), // Up arrow
+        53 => Some("[ESC]".to_string()), // Escape
+        _ => None,
     }
 }

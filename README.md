@@ -1,89 +1,100 @@
 # Inkwell – System‑wide Keystroke Logger for Obsidian 🖋️
 
-> **A lightweight macOS utility that captures your keystrokes and writes them directly into an Obsidian note.**
+> **A lightweight macOS utility that captures your keystrokes system‑wide and
+> writes them into an Obsidian note.**
 >
-> The Inkwell logger runs independently as a background Tauri app. It records keystrokes system‑wide (Chrome, Terminal, Slack, etc.) and appends them to a daily *keylog* note in your Obsidian vault. Integration with **Cogdex Vault Companion** is optional and can be enabled via Cogdex’s settings.
+> Inkwell runs as a background Tauri app. It records keystrokes across all macOS
+> apps (Chrome, Terminal, Slack, WhatsApp, etc.) and, when you opt in, appends
+> them to a daily *keylog* note managed by the
+> [Cogdex Vault Companion](https://github.com/adittamavincent/cogdex-vault-companion)
+> Obsidian plugin.
+
+---
+
+## How it works
+
+1. A CoreGraphics event tap captures every key-down system-wide (requires the
+   **Input Monitoring** (or Accessibility) permission in System Settings).
+2. Each keystroke is stored locally in a SQLite database under
+   `~/Library/Application Support/com.inkwell.app/inkwell.db`.
+3. When Cogdex sync is **enabled (opt-in, off by default)**, captured sessions
+   are reconstructed into readable text and appended to today's keylog note,
+   strictly **below** the `<!-- LOG-BELOW -->` boundary marker that Cogdex
+   writes. This keeps Inkwell's output from colliding with anything Cogdex
+   writes above the line.
+
+The keylog path mirrors Cogdex's own layout:
+
+```
+<Vault>/Daily/YYYY-MM-DD/YYYY-MM-DD - keylog.md
+```
+
+i.e. `<dailyFolderRoot>/<day>/<day><keylogSuffix>.md`. The vault root, folder
+root, day pattern (`%Y-%m-%d`, the chrono equivalent of Cogdex's `YYYY-MM-DD`),
+and keylog suffix are all configurable.
 
 ---
 
 ## Features
 
 - **System‑wide keystroke capture** – works across all macOS apps.
-- **Smart reconstruction** – backspaces, word deletions, and line clears are intelligently merged so the resulting log mirrors what you actually typed.
-- **Automatic daily note routing** – each session is appended to `Daily/YYYY‑MM‑DD/2024‑MM‑DD - keylog.md` inside your vault, below the `<!-- LOG‑BELOW -->` marker.
-- **Configurable output path** – set the target vault folder and note name in the preferences.
-- **Minimal footprint** – lightweight Tauri bundle, no additional runtime dependencies.
+- **Smart reconstruction** – backspaces, word deletions, and line clears are
+  merged so the resulting log mirrors what you actually typed.
+- **Optional Cogdex sync** – append sessions to the Cogdex-managed daily keylog
+  note, below the `LOG-BELOW` marker. Off by default; enable it from Inkwell's
+  settings (`configure_cogdex_sync`).
+- **Local-only** – nothing leaves your machine; the database lives in the app
+  support folder.
 
 ---
 
-## Installation & Setup
+## Building & running
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/adittamavincent/inkwell-keystroke-to-file-logger.git
-   cd inkwell-keystroke-to-file-logger
-   ```
-2. **Install dependencies** (ensure Node 18+ and pnpm are installed)
-   ```bash
-   pnpm install
-   ```
-3. **Build the Tauri app**
-   ```bash
-   pnpm tauri build   # creates a macOS .app bundle in ./src-tauri/target/release
-   ```
-4. **Run the app**
-   ```bash
-   pnpm tauri dev    # launches the logger in development mode
-   ```
-   The app will appear as a menu‑bar icon. Click it to start/stop logging.
+The app is a Rust/Tauri project rooted at `tauri-app/`. The frontend
+(`tauri-app/frontend/`) is currently a placeholder; the menu-bar UI is not yet
+built (see *Missing pieces* below).
+
+```bash
+# from the repo root
+cd tauri-app
+cargo tauri dev      # run in development
+cargo tauri build    # produce a macOS .app bundle (target/release)
+```
+
+`cargo tauri` requires the Tauri CLI (`cargo install tauri-cli` or
+`pnpm dlx @tauri-apps/cli`). On first run, grant the app **Input Monitoring**
+permission in **System Settings → Privacy & Security**, then restart it.
 
 ---
 
-## Configuration
+## Configuration (Cogdex sync)
 
-- **Vault path** – open the app preferences (gear icon) and set the absolute path to your Obsidian vault.
-- **Note naming pattern** – default is `Daily/YYYY‑MM‑DD/$(date) - keylog.md`. You can edit the template in `src/settings.ts`.
-- **Log boundary** – the logger always appends below the marker `<!-- LOG‑BELOW -->`. Ensure this line exists in your daily keylog note (Cogdex creates it automatically).
+Sync is opt-in. From the UI (or via the `configure_cogdex_sync` command) set:
+
+- `enabled` – `true` to turn sync on (default `false`).
+- `vault_path` – absolute path to your Obsidian vault.
+- `daily_folder_root` – default `Daily`.
+- `day_pattern` – chrono strftime pattern; default `%Y-%m-%d` (matches Cogdex).
+- `keylog_suffix` – default ` - keylog`.
+- `idle_timeout_secs` – gap that splits one typing session from the next.
+
+`export_diary` writes the last 7 days of captured keystrokes into the Cogdex
+keylog note for the supplied vault, below the `LOG-BELOW` marker.
 
 ---
 
-## Usage
+## Missing pieces (not yet implemented)
 
-1. Start the logger from the menu bar.
-2. Type anywhere on your Mac. The logger silently records your input.
-3. Stop the logger when you’re done. The captured text is instantly written to the daily keylog note.
-4. Open Obsidian → Daily hub note → scroll to the bottom to see the freshly appended keystrokes.
-
----
+- Menu-bar UI / settings window to drive `configure_cogdex_sync` interactively.
+- Real frontmost-app detection (currently logged as `Unknown`).
+- Live streaming (today sync is triggered on demand via `sync_to_cogdex`).
 
 ## Development
 
-The project is built with **Tauri** (Rust + WebView) and **TypeScript**.
-
 ```bash
-# Run the UI in hot‑reload mode
-pnpm tauri dev
-
-# Run unit tests (if any)
-pnpm test
+cargo check        # type-check the Rust side
+cargo test         # run the reconstruction unit tests
 ```
-
-Feel free to explore `src/` – the core logic lives in `src/logger.ts` and the UI components in `src/ui/`.
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repo.
-2. Create a feature branch.
-3. Run `pnpm install && pnpm tauri dev` to verify your changes.
-4. Submit a pull request with a clear description of what you changed.
-
-All code follows the repository’s ESLint configuration and the Tauri best‑practice guidelines.
-
----
 
 ## License
 

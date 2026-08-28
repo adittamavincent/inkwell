@@ -7,21 +7,18 @@
   "tauri": {
     "bundle": {
       "identifier": "com.inkwell.app",
-      "icon": ["icons/icon.icns"],
+      "icon": ["icons/icon.png"],
       "resources": [],
       "active": true,
       "targets": ["dmg"],
       "macOS": {
-        "category": "public.app-category.utilities",
         "signingIdentity": null,
         "exceptionDomain": null,
         "entitlements": null,
-        "entitlementsInherit": null,
         "minimumSystemVersion": "11.0"
       }
     },
-    "windows": [],
-    "linux": {}
+    "windows": []
   },
   "build": {
     "beforeDevCommand": "pnpm run dev",

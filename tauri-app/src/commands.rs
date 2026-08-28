@@ -1,12 +1,10 @@
 // src/commands.rs
 // Tauri commands that the frontend can invoke.
 
-use tauri::Manager;
-use crate::keystroke::KeystrokeLogger;
 use crate::db;
-use chrono::{Utc, Duration};
+use crate::keystroke::KeystrokeLogger;
+use crate::sync;
 use std::sync::Mutex;
-use serde::Serialize;
 
 // We'll keep a global logger instance.
 lazy_static::lazy_static! {
@@ -27,7 +25,7 @@ pub fn stop_tap() -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 pub struct SessionEntry {
     pub timestamp: String,
     pub app_name: String,
@@ -37,21 +35,61 @@ pub struct SessionEntry {
 #[tauri::command]
 pub fn get_recent_sessions(days: i64) -> Result<Vec<SessionEntry>, String> {
     let rows = db::query_recent_sessions(days).map_err(|e| e.to_string())?;
-    let sessions = rows.into_iter().map(|(ts, app, key)| SessionEntry {
-        timestamp: ts,
-        app_name: app.unwrap_or_default(),
-        key_char: key.unwrap_or_default(),
-    }).collect();
+    let sessions = rows
+        .into_iter()
+        .map(|(ts, app, key)| SessionEntry {
+            timestamp: ts,
+            app_name: app,
+            key_char: key,
+        })
+        .collect();
     Ok(sessions)
 }
 
+/// Configure (and opt in to) the Cogdex sync. Off by default; the frontend must
+/// explicitly enable it and supply a vault path.
 #[tauri::command]
-pub fn export_diary(path: String) -> Result<(), String> {
-    // Simple export: fetch last 7 days and write markdown.
-    let rows = db::query_recent_sessions(7).map_err(|e| e.to_string())?;
-    let mut content = String::new();
-    for (ts, app, key) in rows {
-        content.push_str(&format!("{} – {}: {}\n", ts, app.unwrap_or_default(), key.unwrap_or_default()));
+pub fn configure_cogdex_sync(
+    enabled: bool,
+    vault_path: String,
+    daily_folder_root: Option<String>,
+    day_pattern: Option<String>,
+    keylog_suffix: Option<String>,
+    idle_timeout_secs: Option<u64>,
+) -> Result<(), String> {
+    let mut cfg = sync::config_snapshot();
+    cfg.enabled = enabled;
+    cfg.vault_path = vault_path;
+    if let Some(v) = daily_folder_root {
+        cfg.daily_folder_root = v;
     }
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+    if let Some(v) = day_pattern {
+        cfg.day_pattern = v;
+    }
+    if let Some(v) = keylog_suffix {
+        cfg.keylog_suffix = v;
+    }
+    if let Some(v) = idle_timeout_secs {
+        cfg.idle_timeout_secs = v;
+    }
+    sync::configure(cfg);
+    Ok(())
+}
+
+/// Push captured keystrokes into today's Cogdex keylog note (below LOG-BELOW).
+#[tauri::command]
+pub fn sync_to_cogdex() -> Result<String, String> {
+    sync::sync_to_cogdex()
+}
+
+/// Legacy diary export: write the last 7 days of captured keystrokes into the
+/// Cogdex-managed keylog note for the supplied vault, below the LOG-BELOW
+/// boundary. `vault_path` is the vault root (no more arbitrary file picker).
+#[tauri::command]
+pub fn export_diary(vault_path: String) -> Result<(), String> {
+    let mut cfg = sync::config_snapshot();
+    if cfg.vault_path.trim().is_empty() {
+        cfg.vault_path = vault_path;
+    }
+    sync::sync_to_cogdex_with(cfg).map(|_| ())
 }
