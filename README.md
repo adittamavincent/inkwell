@@ -17,8 +17,10 @@
 
 1. A CoreGraphics event tap captures every key-down system-wide (requires the
    **Input Monitoring** (or Accessibility) permission in System Settings).
-2. Each keystroke is stored locally in a SQLite database under
-   `~/Library/Application Support/com.inkwell.app/inkwell.db`.
+ 2. Each keystroke is encrypted at rest (AES‑256‑GCM) and stored locally in a
+    SQLite database under `~/Library/Application Support/com.inkwell.app/`.
+    The encryption key lives in a `0600` file next to the database, so anyone
+    who can only read the `.db` file sees ciphertext, not keystrokes.
 3. When Cogdex sync is **enabled (opt-in, off by default)**, captured sessions
    are reconstructed into readable text and appended to today's keylog note,
    strictly **below** the `<!-- LOG-BELOW -->` boundary marker that Cogdex
@@ -40,6 +42,13 @@ keylog suffix, and idle timeout are all configurable from the app's UI.
 ## Features
 
 - **System‑wide keystroke capture** – works across all macOS apps.
+- **Frontmost‑app aware** – every keystroke is tagged with the name of the app
+  it was typed into, so sessions can be filtered after the fact.
+- **App exclusion** – password managers and any other apps you list are skipped
+  at capture time and never reach the log (configurable from the UI; ships with
+  common password managers excluded by default).
+- **Encrypted at rest** – captured keystrokes are stored AES‑256‑GCM encrypted
+  on disk.
 - **Smart reconstruction** – backspaces, word deletions, and line clears are
   merged so the resulting log mirrors what you actually typed.
 - **Optional Cogdex sync** – append sessions to the Cogdex-managed daily keylog
@@ -104,6 +113,9 @@ the fields of `sync::CogdexSyncConfig` (defaults are read dynamically via
 - **Day Pattern** – chrono strftime pattern; default `%Y-%m-%d` (matches Cogdex).
 - **Keylog Suffix** – default ` - keylog`.
 - **Idle Timeout (seconds)** – gap that splits one typing session from the next.
+- **Excluded apps** – comma‑separated app names whose keystrokes are never
+  captured (e.g. `1Password, Bitwarden`). Case‑insensitive; common password
+  managers are excluded by default.
 
 Press *Apply Sync Settings* to persist, then *Force Sync* to push captured
 keystrokes into today's keylog note (below the `LOG-BELOW` marker).
@@ -112,9 +124,11 @@ keystrokes into today's keylog note (below the `LOG-BELOW` marker).
 
 ## Known limitations
 
-- **Frontmost-app detection** is not implemented yet — captured app name is
-  logged as `Unknown`.
 - **Sync is on demand** (triggered by *Force Sync*), not live-streamed.
+- **Encryption key** is stored in a local `0600` file, not the macOS Keychain.
+  This keeps keystrokes confidential from any process that can only read the
+  database file, but a process running as your user can still read the key. For
+  stronger protection, move the key into the Keychain.
 
 ## License
 

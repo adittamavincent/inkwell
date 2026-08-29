@@ -34,6 +34,8 @@ struct Inkwell {
     keylog_suffix: String,
     /// Kept as a string in the input field; parsed on save.
     idle_timeout: String,
+    /// Comma-separated app names to exclude from capture.
+    excluded_apps: String,
 
     /// Transient status line shown at the bottom of the window.
     status: String,
@@ -53,6 +55,7 @@ enum Message {
     DayPatternChanged(String),
     KeylogSuffixChanged(String),
     IdleTimeoutChanged(String),
+    ExcludedAppsChanged(String),
 
     // Sync actions
     ApplyConfig,
@@ -72,6 +75,7 @@ impl Default for Inkwell {
             day_pattern: cfg.day_pattern,
             keylog_suffix: cfg.keylog_suffix,
             idle_timeout: cfg.idle_timeout_secs.to_string(),
+            excluded_apps: cfg.excluded_apps.join(", "),
             status: String::new(),
         }
     }
@@ -87,6 +91,12 @@ impl Inkwell {
             day_pattern: self.day_pattern.trim().to_string(),
             keylog_suffix: self.keylog_suffix.trim().to_string(),
             idle_timeout_secs: self.idle_timeout.trim().parse().unwrap_or(60),
+            excluded_apps: self
+                .excluded_apps
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
         }
     }
 }
@@ -130,6 +140,10 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
         }
         Message::IdleTimeoutChanged(v) => {
             state.idle_timeout = v;
+            Task::none()
+        }
+        Message::ExcludedAppsChanged(v) => {
+            state.excluded_apps = v;
             Task::none()
         }
 
@@ -214,6 +228,17 @@ fn view(state: &Inkwell) -> Element<'_, Message> {
     ]
     .spacing(4);
 
+    let excluded_field = column![
+        text("Excluded apps (comma separated)").size(13),
+        text_input("1Password, Bitwarden, …", &state.excluded_apps)
+            .on_input(Message::ExcludedAppsChanged),
+        text(
+            "Keystrokes from these apps are never captured (e.g. password managers)."
+        )
+        .size(11),
+    ]
+    .spacing(4);
+
     let sync_actions = row![
         button("Apply Sync Settings").on_press(Message::ApplyConfig),
         button("Force Sync").on_press(Message::ForceSync),
@@ -232,6 +257,7 @@ fn view(state: &Inkwell) -> Element<'_, Message> {
         day_pattern_field,
         keylog_suffix_field,
         idle_field,
+        excluded_field,
         sync_actions,
         status_line,
     ]
@@ -291,6 +317,9 @@ fn keystroke_stream() -> impl iced::futures::stream::Stream<Item = Message> {
 
 fn main() -> iced::Result {
     env_logger::init();
+    // Apply the default (and any previously saved) app-exclusion list before the
+    // tap can start, so password managers etc. are never captured by default.
+    keystroke::set_excluded_apps(sync::config_snapshot().excluded_apps);
     iced::application("Inkwell", update, view)
         .subscription(subscription)
         .run()

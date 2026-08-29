@@ -22,6 +22,19 @@ const DEFAULT_KEYLOG_SUFFIX: &str = " - keylog";
 const BOUNDARY_MARKER: &str =
     "<!-- LOG-BELOW — external tools may only append below this line -->";
 
+/// Apps excluded from capture by default. Typed secrets in password managers
+/// should never be logged, so we opt these out unless the user overrides.
+const DEFAULT_EXCLUDED_APPS: &[&str] = &[
+    "1password",
+    "bitwarden",
+    "keeper",
+    "lastpass",
+    "dashlane",
+    "icloud keychain",
+    "keypassxc",
+    "macpass",
+];
+
 #[derive(Clone)]
 pub struct CogdexSyncConfig {
     /// Master switch. Off by default — sync is strictly opt-in.
@@ -36,6 +49,9 @@ pub struct CogdexSyncConfig {
     pub keylog_suffix: String,
     /// Inactivity gap (seconds) that splits one typing session from the next.
     pub idle_timeout_secs: u64,
+    /// Apps whose keystrokes are never captured (compared case-insensitively
+    /// against the frontmost app's name).
+    pub excluded_apps: Vec<String>,
 }
 
 impl Default for CogdexSyncConfig {
@@ -47,6 +63,7 @@ impl Default for CogdexSyncConfig {
             day_pattern: DEFAULT_DAY_PATTERN.to_string(),
             keylog_suffix: DEFAULT_KEYLOG_SUFFIX.to_string(),
             idle_timeout_secs: 60,
+            excluded_apps: DEFAULT_EXCLUDED_APPS.iter().map(|s| s.to_string()).collect(),
         }
     }
 }
@@ -56,6 +73,7 @@ lazy_static! {
 }
 
 pub fn configure(config: CogdexSyncConfig) {
+    crate::keystroke::set_excluded_apps(config.excluded_apps.clone());
     *SYNC_CONFIG.lock().unwrap() = config;
 }
 
@@ -115,12 +133,15 @@ fn do_sync(cfg: &CogdexSyncConfig) -> Result<String, String> {
 
 struct Session {
     start: String,
+    /// Timestamp of the most recent keystroke in this session. Session-splitting
+    /// is decided by the gap since this, not since `start`.
+    last: String,
     app: String,
     tokens: Vec<String>,
 }
 
 /// Group raw keystroke rows into typing sessions: a new session starts when the
-/// frontmost app changes or when the gap since the previous keystroke exceeds
+/// frontmost app changes or when the gap since the *previous keystroke* exceeds
 /// `idle_timeout_secs`.
 fn build_session_blocks(rows: Vec<(String, String, String)>, idle_timeout: u64) -> Vec<String> {
     let idle = Duration::seconds(idle_timeout as i64);
@@ -138,16 +159,20 @@ fn build_session_blocks(rows: Vec<(String, String, String)>, idle_timeout: u64) 
 
         let continued = sessions.last_mut().filter(|s| {
             s.app == app
-                && match (dt, parse_ts(&s.start)) {
-                    (Some(d), Some(sd)) => d - sd <= idle,
+                && match (dt, parse_ts(&s.last)) {
+                    (Some(d), Some(ld)) => d - ld <= idle,
                     _ => false,
                 }
         });
 
         match continued {
-            Some(s) => s.tokens.push(key),
+            Some(s) => {
+                s.tokens.push(key);
+                s.last = ts.clone();
+            }
             None => sessions.push(Session {
                 start: ts.clone(),
+                last: ts.clone(),
                 app,
                 tokens: vec![key],
             }),
@@ -316,22 +341,15 @@ pub fn reconstruct_text(tokens: &[String]) -> String {
             };
             cursor = new_cursor;
         } else if token == "[⌘⌫]" {
+            // Command+Backspace: delete from the cursor back to the start of the
+            // current line (mirrors Cogdex's TS reconstructor).
             if let Some(sel) = selection {
                 cursor = delete_selection(&mut buffer, sel);
                 selection = None;
             } else {
                 let mut start = cursor;
-                while start > 0 && buffer[start - 1].is_whitespace() {
+                while start > 0 && buffer[start - 1] != '\n' {
                     start -= 1;
-                }
-                if start > 0 {
-                    if is_alphanumeric(buffer[start - 1]) {
-                        while start > 0 && is_alphanumeric(buffer[start - 1]) {
-                            start -= 1;
-                        }
-                    } else {
-                        start -= 1;
-                    }
                 }
                 buffer.drain(start..cursor);
                 cursor = start;
@@ -378,7 +396,7 @@ pub fn reconstruct_text(tokens: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::reconstruct_text;
+    use super::{build_session_blocks, reconstruct_text};
 
     #[test]
     fn deletes_backspace() {
@@ -390,5 +408,75 @@ mod tests {
     fn inserts_newline() {
         let tokens = vec!["a".to_string(), "[↵]".to_string(), "b".to_string()];
         assert_eq!(reconstruct_text(&tokens), "a\nb");
+    }
+
+    #[test]
+    fn select_all_then_type_replaces() {
+        let tokens = vec!["a".to_string(), "b".to_string(), "c".to_string(), "[⌘A]".to_string(), "x".to_string()];
+        assert_eq!(reconstruct_text(&tokens), "x");
+    }
+
+    #[test]
+    fn word_delete_removes_whole_word() {
+        let tokens = vec!["h".to_string(), "e".to_string(), "l".to_string(), "l".to_string(), "o".to_string(), "[⌥⌫]".to_string(), "y".to_string()];
+        assert_eq!(reconstruct_text(&tokens), "y");
+    }
+
+    #[test]
+    fn command_backspace_deletes_to_line_start() {
+        let tokens = vec![
+            "a".to_string(), "b".to_string(), "c".to_string(), "[↵]".to_string(),
+            "d".to_string(), "e".to_string(), "[⌘⌫]".to_string(),
+        ];
+        assert_eq!(reconstruct_text(&tokens), "abc\n");
+    }
+
+    #[test]
+    fn shift_arrow_selection_then_type() {
+        let tokens = vec![
+            "a".to_string(), "b".to_string(), "c".to_string(),
+            "[⇧←]".to_string(), "[⇧←]".to_string(), "x".to_string(),
+        ];
+        assert_eq!(reconstruct_text(&tokens), "ax");
+    }
+
+    #[test]
+    fn undo_marker_is_ignored() {
+        let tokens = vec!["h".to_string(), "i".to_string(), "[⌘Z]".to_string()];
+        assert_eq!(reconstruct_text(&tokens), "hi");
+    }
+
+    #[test]
+    fn continuous_typing_stays_one_session() {
+        // All keystrokes within the idle window must remain a single session,
+        // even if the total span exceeds idle (regression test for the
+        // start-vs-last split bug).
+        let rows = vec![
+            ("2024-01-01T00:00:00Z".to_string(), "Code".to_string(), "h".to_string()),
+            ("2024-01-01T00:00:30Z".to_string(), "Code".to_string(), "i".to_string()),
+            ("2024-01-01T00:01:30Z".to_string(), "Code".to_string(), " ".to_string()),
+        ];
+        let blocks = build_session_blocks(rows, 60);
+        assert_eq!(blocks.len(), 1, "continuous typing should not split");
+    }
+
+    #[test]
+    fn idle_gap_splits_session() {
+        let rows = vec![
+            ("2024-01-01T00:00:00Z".to_string(), "Code".to_string(), "h".to_string()),
+            ("2024-01-01T00:02:00Z".to_string(), "Code".to_string(), "i".to_string()),
+        ];
+        let blocks = build_session_blocks(rows, 60);
+        assert_eq!(blocks.len(), 2, "gap beyond idle should split");
+    }
+
+    #[test]
+    fn app_change_splits_session() {
+        let rows = vec![
+            ("2024-01-01T00:00:00Z".to_string(), "Code".to_string(), "h".to_string()),
+            ("2024-01-01T00:00:01Z".to_string(), "Notes".to_string(), "i".to_string()),
+        ];
+        let blocks = build_session_blocks(rows, 60);
+        assert_eq!(blocks.len(), 2, "app change should split");
     }
 }
