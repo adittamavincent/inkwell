@@ -335,9 +335,7 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::CopyPreview => {
-            iced::clipboard::write::<Message>(preview_text(state))
-        }
+        Message::CopyPreview => iced::clipboard::write(preview_text(state)),
 
         Message::TrayMenu(id) => {
             match id.as_str() {
@@ -348,11 +346,16 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
                         state.reset_live();
                     }
                 }
-                "quit" => std::process::exit(0),
+                "quit" => {
+                    state.running = false;
+                    refresh_tray(false);
+                    std::process::exit(0);
+                }
                 _ => {}
             }
             Task::none()
-        }
+        },
+
     };
 
     // After every message, refresh the text editor when the underlying text
@@ -554,13 +557,175 @@ fn config_pane(state: &Inkwell, width: f32) -> Element<'_, Message> {
             .style(btn_style(true, false))
             .width(Length::Fill),
         rule::Rule::horizontal(1),
-        button("Force Sync")
-            .on_press(Message::ForceSync)
-            .style(btn_style(true, false))
-            .width(Length::Fill),
-        text(&state.sync_status)
-            .size(12)
-            .color(col(C_MUTED)),
+        // Icon‑only Force Sync button aligned to the right
+        row![
+            text(&state.sync_status)
+                .size(12)
+                .color(col(C_MUTED)),
+            horizontal_space(),
+            button(text("🔁").size(16))
+                .on_press(Message::ForceSync)
+                .style(btn_style(true, false))
+                .width(Length::Shrink),
+        ]
+        .spacing(8)
+        .width(Length::Fill),                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+                //
+
     ]
     .spacing(12)
     .padding(16)
