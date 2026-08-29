@@ -96,6 +96,8 @@ struct Inkwell {
 
     /// Selectable read-only text editor for the history view.
     editor_content: text_editor::Content,
+    /// Last preview text — only rebuild `editor_content` when this changes.
+    last_preview: String,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +107,7 @@ enum Message {
     LogStatus(String),
     Keystroke((String, String)),
     ClearHistory,
+    CopyPreview,
     EditorAction(text_editor::Action),
     TrayMenu(String),
     ToggleSide,
@@ -146,6 +149,7 @@ impl Default for Inkwell {
             animating: false,
             sync_status: String::new(),
             editor_content: text_editor::Content::default(),
+            last_preview: String::new(),
         }
     }
 }
@@ -331,6 +335,10 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::CopyPreview => {
+            iced::clipboard::write::<Message>(preview_text(state))
+        }
+
         Message::TrayMenu(id) => {
             match id.as_str() {
                 "toggle" => {
@@ -347,10 +355,18 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
         }
     };
 
-    // After every message, refresh the selectable text editor with the latest
-    // history. This is cheap (string formatting + Content replacement) and
-    // guarantees the editor is always in sync with the state.
-    state.editor_content = text_editor::Content::with_text(&preview_text(state));
+    // After every message, refresh the selectable text editor — but only when
+    // the underlying text has actually changed. Replacing the Content kills the
+    // editor's internal state (focus, selection, cursor), so we use
+    // perform(Paste) to update in-place instead.
+    let new_preview = preview_text(state);
+    if new_preview != state.last_preview {
+        use std::sync::Arc;
+        state.editor_content.perform(text_editor::Action::Edit(
+            text_editor::Edit::Paste(Arc::new(new_preview.clone())),
+        ));
+        state.last_preview = new_preview;
+    }
     task
 }
 
@@ -409,13 +425,6 @@ fn input_style(_t: &Theme, _s: text_input::Status) -> text_input::Style {
 // ---------------------------------------------------------------------------
 // Widget helpers
 // ---------------------------------------------------------------------------
-fn el<'a, W>(widget: W) -> Element<'a, Message>
-where
-    W: Into<Element<'a, Message>>,
-{
-    widget.into()
-}
-
 fn field<'a>(
     label: &'a str,
     placeholder: &'a str,
@@ -501,6 +510,9 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
         row![
             text("History").size(18).color(col(C_TEXT)),
             horizontal_space(),
+            button(text("Copy").size(13))
+                .on_press(Message::CopyPreview)
+                .style(btn_style(false, false)),
             side_toggle,
             button(text("Clear").size(13))
                 .on_press(Message::ClearHistory)
