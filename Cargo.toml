@@ -43,4 +43,4 @@ icons = ["icons/icon.icns"]
 # so the resulting .app/.dmg can be notarized. If the value is ever empty,
 # cargo-packager fails loudly instead of producing an unsigned (ad-hoc) bundle.
 [package.metadata.packager.macos]
-signing-identity = "${APPLE_SIGNING_IDENTITY}"
+signing-identity = "-"
