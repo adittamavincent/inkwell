@@ -32,7 +32,6 @@ The vault root, folder root, day pattern (`%Y-%m-%d`, the chrono equivalent of C
 - **Frontmost‑app aware** – every keystroke is tagged with the name of the app it was typed into, so sessions can be filtered after the fact.
 - **App exclusion** – password managers and any other apps you list are skipped at capture time and never reach the log (configurable from the UI; ships with common password managers excluded by default).
 - **Encrypted at rest** – captured keystrokes are stored AES‑256‑GCM encrypted on disk.
-- **Privacy‑gate preview** – before committing anything, hit *Refresh Preview* to review exactly what a sync *would* write: the same query window, idle‑timeout grouping, and app exclusions as the real *Force Sync*. Already‑excluded apps (e.g. password managers) never appear, which is your visual proof the filter works at capture time.
 - **Smart reconstruction** – backspaces, word deletions, and line clears are merged so the resulting log mirrors what you actually typed.
 - **Optional Cogdex sync** – append sessions to the Cogdex-managed daily keylog note, below the `LOG-BELOW` marker. Off by default; toggle and configure it from Inkwell's settings UI.
 - **Local-only** – nothing leaves your machine; the database lives in the app support folder.
@@ -90,11 +89,6 @@ Sync is opt-in and configured entirely from the app's UI, which maps 1:1 onto th
 - **Excluded apps** – comma‑separated app names whose keystrokes are never captured (e.g. `1Password, Bitwarden`). Case‑insensitive; common password managers are excluded by default.
 
 Press *Apply Sync Settings* to persist, then *Force Sync* to push captured keystrokes into today's keylog note (below the `LOG-BELOW` marker).
-
-**Review before you sync.** Click *Refresh Preview* to load a read‑only list of the sessions that fall inside the current sync window.
-Each card shows the start time, the source app, and the reconstructed text — identical to what *Force Sync* will append.
-Use it as a privacy gate: only press *Force Sync* once you've reviewed the list.
-The preview never advances the last‑sync watermark, so refreshing is safe to do repeatedly.
 
 ---
 

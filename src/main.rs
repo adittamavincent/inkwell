@@ -10,8 +10,13 @@
 // defaults are read dynamically via `sync::config_snapshot()` so nothing is
 // hardcoded here.
 
-use chrono::{DateTime, Duration, Local, Utc};
+// The `objc` crate's `msg_send!` macro trips `unexpected_cfgs` lints on modern
+// Rust; the macro is sound, so silence the noise crate-wide.
+#![allow(unexpected_cfgs)]
+
+use chrono::{DateTime, Local, Utc};
 use iced::border;
+use iced::time;
 use iced::widget::{
     button, checkbox, column, container, horizontal_space, row, rule, scrollable, text,
     text_input, vertical_space, Space,
@@ -57,6 +62,9 @@ fn history_id() -> Id {
     Id::new("history")
 }
 
+/// Target width (px) of the expanded secondary (right) panel.
+const SIDE_W: f32 = 340.0;
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -82,9 +90,12 @@ struct Inkwell {
     live_text: String,
     last_tick: Option<DateTime<Local>>,
 
-    /// Reviewed-but-not-yet-synced sessions (the privacy gate preview).
-    preview: Vec<SessionPreview>,
-    preview_status: String,
+    /// Whether the right-hand (secondary) config/sync panel is expanded.
+    side_open: bool,
+    /// Current animated width of the secondary panel (0 when collapsed).
+    side_width: f32,
+    /// True while the collapse/expand animation is in flight.
+    animating: bool,
 
     /// Transient status line shown at the bottom of the window.
     status: String,
@@ -97,6 +108,8 @@ enum Message {
     LogStatus(String),
     Keystroke((String, String)),
     ClearHistory,
+    ToggleSide,
+    Tick,
 
     ToggleEnabled(bool),
     VaultPathChanged(String),
@@ -107,8 +120,6 @@ enum Message {
     ExcludedAppsChanged(String),
 
     ApplyConfig,
-    LoadPreview,
-    PreviewLoaded(Result<Vec<SessionPreview>, String>),
     ForceSync,
     SyncResult(Result<String, String>),
 }
@@ -117,7 +128,7 @@ impl Default for Inkwell {
     fn default() -> Self {
         let cfg = sync::config_snapshot();
         Inkwell {
-            running: false,
+            running: true,
             enabled: cfg.enabled,
             vault_path: cfg.vault_path,
             daily_folder_root: cfg.daily_folder_root,
@@ -131,8 +142,9 @@ impl Default for Inkwell {
             live_start: None,
             live_text: String::new(),
             last_tick: None,
-            preview: Vec::new(),
-            preview_status: String::new(),
+            side_open: false,
+            side_width: 0.0,
+            animating: false,
             status: String::new(),
         }
     }
@@ -189,6 +201,24 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
         Message::ClearHistory => {
             state.history.clear();
             state.reset_live();
+            Task::none()
+        }
+
+        Message::ToggleSide => {
+            state.side_open = !state.side_open;
+            state.animating = true;
+            Task::none()
+        }
+        Message::Tick => {
+            let target = if state.side_open { SIDE_W } else { 0.0 };
+            let diff = target - state.side_width;
+            if diff.abs() < 0.5 {
+                state.side_width = target;
+                state.animating = false;
+            } else {
+                // Ease toward the target for a smooth collapse/expand.
+                state.side_width += diff * 0.25;
+            }
             Task::none()
         }
 
@@ -262,34 +292,6 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
         Message::ApplyConfig => {
             sync::configure(state.build_config());
             state.status = "Sync settings applied.".into();
-            Task::none()
-        }
-        Message::LoadPreview => {
-            state.preview_status = "Loading preview…".into();
-            Task::perform(async { sync::preview_unsynced() }, Message::PreviewLoaded)
-        }
-        Message::PreviewLoaded(Ok(previews)) => {
-            let sessions = previews.len();
-            let words: usize = previews.iter().map(|s| s.text.split_whitespace().count()).sum();
-            let since = sync::last_sync().unwrap_or_else(|| Utc::now() - Duration::days(1));
-            let since_str = since
-                .with_timezone(&Local)
-                .format("%Y-%m-%d %H:%M")
-                .to_string();
-            state.preview_status = if sessions == 0 {
-                "Nothing to sync since the last sync.".into()
-            } else {
-                format!(
-                    "{} session(s) · ~{} words · since {}",
-                    sessions, words, since_str
-                )
-            };
-            state.preview = previews;
-            Task::none()
-        }
-        Message::PreviewLoaded(Err(e)) => {
-            state.preview_status = format!("Preview error: {e}");
-            state.preview = Vec::new();
             Task::none()
         }
         Message::ForceSync => {
@@ -466,6 +468,8 @@ fn sidebar(state: &Inkwell) -> Element<'_, Message> {
     .spacing(6);
 
     let col = column![
+        title,
+        subtitle,
         row![dot, state_label].spacing(8).align_y(iced::alignment::Vertical::Center),
         toggle_btn,
         rule::Rule::horizontal(1),
@@ -511,10 +515,15 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
         column(entries).spacing(10).padding(16).width(Length::Fill).into()
     };
 
+    let side_toggle = button(text(if state.side_open { "▸ Sync" } else { "◂ Sync" }).size(13))
+        .on_press(Message::ToggleSide)
+        .style(btn_style(false, false));
+
     let header = container(
         row![
             text("History").size(18).color(col(C_TEXT)),
             horizontal_space(),
+            side_toggle,
             button(text("Clear").size(13)).on_press(Message::ClearHistory).style(btn_style(false, false)),
         ]
         .spacing(10)
@@ -534,45 +543,9 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
         .into()
 }
 
-fn config_pane(state: &Inkwell) -> Element<'_, Message> {
+fn config_pane(state: &Inkwell, width: f32) -> Element<'_, Message> {
     let header = text("Cogdex (Obsidian) Sync").size(18).color(col(C_TEXT));
     let toggle = checkbox("Enable sync", state.enabled).on_toggle(Message::ToggleEnabled);
-
-    let review_header = text("Review (privacy gate)").size(15).color(col(C_TEXT));
-    let refresh_btn = button(text("Refresh Preview").size(13))
-        .on_press(Message::LoadPreview)
-        .style(btn_style(false, false));
-
-    let preview_cards: Element<Message> = if state.preview.is_empty() {
-        container(
-            text("Click “Refresh Preview” to review what a sync would write.")
-                .size(13)
-                .color(col(C_MUTED)),
-        )
-        .padding(10)
-        .style(panel(C_CARD))
-        .into()
-    } else {
-        let cards: Vec<Element<Message>> = state
-            .preview
-            .iter()
-            .map(|s| {
-                let time = s.start.with_timezone(&Local).format("%H:%M").to_string();
-                let title = if s.app.is_empty() {
-                    time
-                } else {
-                    format!("{} — {}", time, s.app)
-                };
-                let body = scrollable(text(&s.text).size(12).font(iced::Font::MONOSPACE).color(col(C_TEXT)))
-                    .height(Length::Fixed(110.0));
-                container(column![text(title).size(12).color(col(C_TEXT)), body].spacing(4))
-                    .padding(10)
-                    .style(panel(C_CARD))
-                    .into()
-            })
-            .collect();
-        column(cards).spacing(8).into()
-    };
 
     let col = column![
         header,
@@ -589,11 +562,6 @@ fn config_pane(state: &Inkwell) -> Element<'_, Message> {
             .style(btn_style(true, false))
             .width(Length::Fill),
         rule::Rule::horizontal(1),
-        review_header,
-        row![refresh_btn, text(&state.preview_status).size(12).color(col(C_MUTED))]
-            .spacing(10)
-            .align_y(iced::alignment::Vertical::Center),
-        preview_cards,
         button("Force Sync")
             .on_press(Message::ForceSync)
             .style(btn_style(true, false))
@@ -604,14 +572,26 @@ fn config_pane(state: &Inkwell) -> Element<'_, Message> {
     .width(Length::Fill);
 
     container(scrollable(col).width(Length::Fill).height(Length::Fill))
-        .width(Length::Fixed(340.0))
+        .width(Length::Fixed(width))
         .height(Length::Fill)
         .style(panel(C_PANEL))
         .into()
 }
 
 fn view(state: &Inkwell) -> Element<'_, Message> {
-    let content = row![sidebar(state), history_pane(state), config_pane(state)]
+    // The secondary panel is rendered at its animated width. When fully
+    // collapsed (and not mid-animation) we swap in a zero-width spacer so no
+    // content is laid out off-screen.
+    let side: Element<'_, Message> = if state.side_width < 1.0 && !state.animating {
+        container(Space::new(Length::Fixed(0.0), Length::Fill))
+            .width(Length::Fixed(0.0))
+            .height(Length::Fill)
+            .into()
+    } else {
+        config_pane(state, state.side_width)
+    };
+
+    let content = row![sidebar(state), history_pane(state), side]
         .spacing(1)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -640,14 +620,20 @@ fn view(state: &Inkwell) -> Element<'_, Message> {
 // (app, char) pairs into the live history.
 // ---------------------------------------------------------------------------
 fn subscription(state: &Inkwell) -> Subscription<Message> {
-    if !state.running {
-        return Subscription::none();
+    let mut subs: Vec<Subscription<Message>> = Vec::new();
+
+    if state.running {
+        #[derive(Hash, Clone, Copy)]
+        struct Keytap;
+        subs.push(Subscription::run_with_id(Keytap, keystroke_stream()));
     }
 
-    #[derive(Hash, Clone, Copy)]
-    struct Keytap;
+    // While the secondary panel is animating, tick ~120fps to step its width.
+    if state.animating {
+        subs.push(time::every(std::time::Duration::from_millis(8)).map(|_| Message::Tick));
+    }
 
-    Subscription::run_with_id(Keytap, keystroke_stream())
+    Subscription::batch(subs)
 }
 
 fn keystroke_stream() -> impl iced::futures::Stream<Item = Message> {

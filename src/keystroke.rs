@@ -15,7 +15,7 @@ use core_graphics::event::{
 };
 use core_graphics::sys::CGEventRef;
 use foreign_types::ForeignType;
-use iced::futures::channel::mpsc::{UnboundedSender, unbounded};
+use iced::futures::channel::mpsc::UnboundedSender;
 use objc::runtime::{Class, Object};
 use objc::msg_send;
 use objc::sel;
@@ -36,12 +36,12 @@ lazy_static::lazy_static! {
     static ref EXCLUDED_APPS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
 
-/// A live broadcast channel for captured keystrokes. When set (via
-/// `set_sink`), every captured (app, char) pair is pushed here so the UI can
-/// show a real-time, chat-like history of what's being typed. The sender is
-/// owned by the iced subscription, which swaps in a fresh one each time the tap
-/// starts; the capture thread only reads the current global sender, so a stale
-/// sender is harmless (its `unbounded_send` simply returns `Err`).
+// A live broadcast channel for captured keystrokes. When set (via `set_sink`),
+// every captured (app, char) pair is pushed here so the UI can show a
+// real-time, chat-like history of what's being typed. The sender is owned by
+// the iced subscription, which swaps in a fresh one each time the tap starts;
+// the capture thread only reads the current global sender, so a stale sender is
+// harmless (its `unbounded_send` simply returns `Err`).
 lazy_static::lazy_static! {
     static ref SINK: Mutex<Option<UnboundedSender<(String, String)>>> =
         Mutex::new(None);

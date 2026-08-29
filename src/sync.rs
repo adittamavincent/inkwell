@@ -89,21 +89,10 @@ pub fn sync_to_cogdex() -> Result<String, String> {
 
 /// Sync using a one-off config (used by the legacy `export_diary` command,
 /// which passes the vault path directly instead of relying on saved settings).
+#[allow(dead_code)]
 pub fn sync_to_cogdex_with(mut cfg: CogdexSyncConfig) -> Result<String, String> {
     cfg.enabled = true;
     do_sync(&cfg)
-}
-
-/// Preview the sessions that a sync would write right now, **without** touching
-/// the vault or advancing the last-sync watermark. Uses the same query window
-/// (`last_sync`) and the same grouping as `do_sync`, so the review is truthful.
-pub fn preview_unsynced() -> Result<Vec<SessionPreview>, String> {
-    let cfg = SYNC_CONFIG.lock().unwrap().clone();
-    let since = last_sync()
-        .map(|d| d.to_rfc3339())
-        .unwrap_or_else(|| (Utc::now() - Duration::days(1)).to_rfc3339());
-    let rows = db::query_sessions_since(&since).map_err(|e| e.to_string())?;
-    Ok(group_sessions(rows, cfg.idle_timeout_secs))
 }
 
 fn do_sync(cfg: &CogdexSyncConfig) -> Result<String, String> {

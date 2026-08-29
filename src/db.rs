@@ -169,6 +169,7 @@ pub fn query_sessions_since(since: &str) -> Result<Vec<(String, String, String)>
 }
 
 /// Convenience helper used by the legacy diary export (last `days` days).
+#[allow(dead_code)]
 pub fn query_recent_sessions(days: i64) -> Result<Vec<(String, String, String)>> {
     let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
     query_sessions_since(&cutoff.to_rfc3339())
