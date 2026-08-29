@@ -1,0 +1,27 @@
+[package]
+name = "inkwell"
+version = "0.1.0"
+edition = "2021"
+description = "Inkwell — system-wide keystroke logger that syncs into an Obsidian (Cogdex) vault"
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio"] }
+rusqlite = "0.31"
+chrono = "0.4"
+core-graphics = "0.24"
+core-foundation = "0.10"
+foreign-types = "0.5"
+log = "0.4"
+env_logger = "0.11"
+lazy_static = "1"
+
+# --- cargo-packager: bundles the pure-Rust binary into a native macOS .app/.dmg ---
+# (replaces the Tauri CLI bundler we dropped). Run `cargo packager --release`.
+[package.metadata.packager]
+product-name = "Inkwell"
+identifier = "com.inkwell.app"
+category = "Utility"
+formats = ["app", "dmg"]
+# cargo-packager does not build for us; let it compile the release binary first.
+before-packaging-command = "cargo build --release"
+icons = ["icons/icon.icns"]

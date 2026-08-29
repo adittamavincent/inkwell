@@ -3,9 +3,11 @@
 > **A lightweight macOS utility that captures your keystrokes system‑wide and
 > writes them into an Obsidian note.**
 >
-> Inkwell runs as a background Tauri app. It records keystrokes across all macOS
-> apps (Chrome, Terminal, Slack, WhatsApp, etc.) and, when you opt in, appends
-> them to a daily *keylog* note managed by the
+> Inkwell is a **pure‑Rust desktop app** built with the
+> [`iced`](https://github.com/iced-rs/iced) GUI framework — no Tauri, no
+> web frontend. It records keystrokes across all macOS apps (Chrome, Terminal,
+> Slack, WhatsApp, etc.) and, when you opt in, appends them to a daily *keylog*
+> note managed by the
 > [Cogdex Vault Companion](https://github.com/adittamavincent/cogdex-vault-companion)
 > Obsidian plugin.
 
@@ -31,7 +33,7 @@ The keylog path mirrors Cogdex's own layout:
 
 i.e. `<dailyFolderRoot>/<day>/<day><keylogSuffix>.md`. The vault root, folder
 root, day pattern (`%Y-%m-%d`, the chrono equivalent of Cogdex's `YYYY-MM-DD`),
-and keylog suffix are all configurable.
+keylog suffix, and idle timeout are all configurable from the app's UI.
 
 ---
 
@@ -41,8 +43,8 @@ and keylog suffix are all configurable.
 - **Smart reconstruction** – backspaces, word deletions, and line clears are
   merged so the resulting log mirrors what you actually typed.
 - **Optional Cogdex sync** – append sessions to the Cogdex-managed daily keylog
-  note, below the `LOG-BELOW` marker. Off by default; enable it from Inkwell's
-  settings (`configure_cogdex_sync`).
+  note, below the `LOG-BELOW` marker. Off by default; toggle and configure it
+  from Inkwell's settings UI.
 - **Local-only** – nothing leaves your machine; the database lives in the app
   support folder.
 
@@ -50,51 +52,69 @@ and keylog suffix are all configurable.
 
 ## Building & running
 
-The app is a Rust/Tauri project rooted at `tauri-app/`. The frontend
-(`tauri-app/frontend/`) is currently a placeholder; the menu-bar UI is not yet
-built (see *Missing pieces* below).
+Inkwell is a single Rust binary crate (no separate frontend).
 
 ```bash
-# from the repo root
-cd tauri-app
-cargo tauri dev      # run in development
-cargo tauri build    # produce a macOS .app bundle (target/release)
+cargo run --release          # build + launch the GUI
+cargo check                  # type-check only
+cargo test                   # run the reconstruction unit tests
 ```
 
-`cargo tauri` requires the Tauri CLI (`cargo install tauri-cli` or
-`pnpm dlx @tauri-apps/cli`). On first run, grant the app **Input Monitoring**
-permission in **System Settings → Privacy & Security**, then restart it.
+### Packaging a native macOS `.app` / `.dmg`
+
+Bundling is handled by [`cargo-packager`](https://github.com/crabnebula-dev/cargo-packager)
+(replacing the old Tauri CLI bundler). Configuration lives in the
+`[package.metadata.packager]` section of `Cargo.toml`, and the icon is
+`icons/icon.icns`.
+
+```bash
+rustup target add aarch64-apple-darwin     # Apple Silicon (host on M-series Macs)
+cargo install cargo-packager --locked       # install the packager once
+cargo packager --release                    # produces .app + .dmg for the host arch
+# explicitly target Apple Silicon from any machine:
+cargo packager --release --target aarch64-apple-darwin
+```
+
+Output lands in `target/release/`:
+
+```
+target/release/Inkwell.app
+target/release/Inkwell_0.1.0_aarch64.dmg
+```
+
+The bundle is **not code-signed** by default, so macOS Gatekeeper will block the
+first launch. Open it via right‑click → *Open*, or run
+`xattr -dr com.apple.quarantine target/release/Inkwell.app`. For distribution,
+set `signing-identity` under `[package.metadata.packager.macos]` and notarize.
+
+On first run, grant the app **Input Monitoring** permission in
+**System Settings → Privacy & Security**, then restart it.
 
 ---
 
 ## Configuration (Cogdex sync)
 
-Sync is opt-in. From the UI (or via the `configure_cogdex_sync` command) set:
+Sync is opt-in and configured entirely from the app's UI, which maps 1:1 onto
+the fields of `sync::CogdexSyncConfig` (defaults are read dynamically via
+`sync::config_snapshot()` — nothing is hardcoded):
 
-- `enabled` – `true` to turn sync on (default `false`).
-- `vault_path` – absolute path to your Obsidian vault.
-- `daily_folder_root` – default `Daily`.
-- `day_pattern` – chrono strftime pattern; default `%Y-%m-%d` (matches Cogdex).
-- `keylog_suffix` – default ` - keylog`.
-- `idle_timeout_secs` – gap that splits one typing session from the next.
+- **Enable Cogdex sync** – toggle to turn sync on (default off).
+- **Vault Path** – absolute path to your Obsidian vault.
+- **Daily Root** – default `Daily`.
+- **Day Pattern** – chrono strftime pattern; default `%Y-%m-%d` (matches Cogdex).
+- **Keylog Suffix** – default ` - keylog`.
+- **Idle Timeout (seconds)** – gap that splits one typing session from the next.
 
-`export_diary` writes the last 7 days of captured keystrokes into the Cogdex
-keylog note for the supplied vault, below the `LOG-BELOW` marker.
+Press *Apply Sync Settings* to persist, then *Force Sync* to push captured
+keystrokes into today's keylog note (below the `LOG-BELOW` marker).
 
 ---
 
-## Missing pieces (not yet implemented)
+## Known limitations
 
-- Menu-bar UI / settings window to drive `configure_cogdex_sync` interactively.
-- Real frontmost-app detection (currently logged as `Unknown`).
-- Live streaming (today sync is triggered on demand via `sync_to_cogdex`).
-
-## Development
-
-```bash
-cargo check        # type-check the Rust side
-cargo test         # run the reconstruction unit tests
-```
+- **Frontmost-app detection** is not implemented yet — captured app name is
+  logged as `Unknown`.
+- **Sync is on demand** (triggered by *Force Sync*), not live-streamed.
 
 ## License
 
