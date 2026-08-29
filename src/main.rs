@@ -99,7 +99,7 @@ impl Inkwell {
             vault_path: self.vault_path.trim().to_string(),
             daily_folder_root: self.daily_folder_root.trim().to_string(),
             day_pattern: self.day_pattern.trim().to_string(),
-            keylog_suffix: self.keylog_suffix.trim().to_string(),
+            keylog_suffix: self.keylog_suffix.to_string(),
             idle_timeout_secs: self.idle_timeout.trim().parse().unwrap_or(60),
             excluded_apps: self
                 .excluded_apps
