@@ -15,6 +15,7 @@ use core_graphics::event::{
 };
 use core_graphics::sys::CGEventRef;
 use foreign_types::ForeignType;
+use iced::futures::channel::mpsc::{UnboundedSender, unbounded};
 use objc::runtime::{Class, Object};
 use objc::msg_send;
 use objc::sel;
@@ -33,6 +34,22 @@ use crate::db;
 // password managers, banking, etc. out of the log.
 lazy_static::lazy_static! {
     static ref EXCLUDED_APPS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+}
+
+/// A live broadcast channel for captured keystrokes. When set (via
+/// `set_sink`), every captured (app, char) pair is pushed here so the UI can
+/// show a real-time, chat-like history of what's being typed. The sender is
+/// owned by the iced subscription, which swaps in a fresh one each time the tap
+/// starts; the capture thread only reads the current global sender, so a stale
+/// sender is harmless (its `unbounded_send` simply returns `Err`).
+lazy_static::lazy_static! {
+    static ref SINK: Mutex<Option<UnboundedSender<(String, String)>>> =
+        Mutex::new(None);
+}
+
+/// Install (or replace) the live keystroke sink used by the UI subscription.
+pub fn set_sink(tx: UnboundedSender<(String, String)>) {
+    *SINK.lock().unwrap() = Some(tx);
 }
 
 /// Replace the exclusion list (app names, comma/line separated in the UI).
@@ -141,13 +158,20 @@ impl KeystrokeLogger {
 								return None;
 							}
 						}
-						let timestamp = Utc::now().to_rfc3339();
-						let _ = db::insert_keystroke(
-							&timestamp,
-							&app_name,
-							&key_char,
-							key_code as i64,
-						);
+					let timestamp = Utc::now().to_rfc3339();
+					let _ = db::insert_keystroke(
+						&timestamp,
+						&app_name,
+						&key_char,
+						key_code as i64,
+					);
+
+					// Broadcast to the live UI feed (if a sink is installed).
+					if !key_char.is_empty() {
+						if let Some(tx) = SINK.lock().unwrap().as_ref() {
+							let _ = tx.unbounded_send((app_name.clone(), key_char.clone()));
+						}
+					}
                     }
                     None
                 },

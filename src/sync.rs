@@ -178,7 +178,15 @@ pub fn group_sessions(
 
     for (ts, app, key) in rows {
         let app = app.trim().to_string();
-        let key = key.trim().to_string();
+        // A single character — notably a space (" ") — must be preserved
+        // verbatim. Only multi-character control tokens like "[⌫]" get trimmed
+        // of any stray surrounding whitespace; trimming a lone space would
+        // delete it and ruin word separation in the reconstruction.
+        let key = if key.chars().count() == 1 {
+            key
+        } else {
+            key.trim().to_string()
+        };
         if key.is_empty() {
             continue;
         }
@@ -527,5 +535,26 @@ mod tests {
         ];
         let blocks = build_session_blocks(rows, 60);
         assert_eq!(blocks.len(), 2, "app change should split");
+    }
+
+    #[test]
+    fn spaces_are_preserved_between_words() {
+        // Regression: `group_sessions` used to `key.trim()` every token, which
+        // deleted lone spaces (" ".trim() == "") and collapsed words.
+        let rows = vec![
+            ("2024-01-01T00:00:00Z".to_string(), "Code".to_string(), "h".to_string()),
+            ("2024-01-01T00:00:01Z".to_string(), "Code".to_string(), "i".to_string()),
+            ("2024-01-01T00:00:02Z".to_string(), "Code".to_string(), " ".to_string()),
+            ("2024-01-01T00:00:03Z".to_string(), "Code".to_string(), "t".to_string()),
+            ("2024-01-01T00:00:04Z".to_string(), "Code".to_string(), "h".to_string()),
+            ("2024-01-01T00:00:05Z".to_string(), "Code".to_string(), "e".to_string()),
+            ("2024-01-01T00:00:06Z".to_string(), "Code".to_string(), "r".to_string()),
+            ("2024-01-01T00:00:07Z".to_string(), "Code".to_string(), "e".to_string()),
+        ];
+        let blocks = build_session_blocks(rows, 60);
+        assert_eq!(blocks.len(), 1);
+        // The reconstructed body must keep the space between "hi" and "there".
+        assert!(blocks[0].contains("hi there"), "got: {:?}", blocks[0]);
+        assert!(!blocks[0].contains("hithere"), "space was dropped: {:?}", blocks[0]);
     }
 }
