@@ -112,7 +112,7 @@ pub fn app_support_dir() -> PathBuf {
     dir
 }
 
-pub fn init_db() -> Result<Connection> {
+fn init_db() -> Result<Connection> {
     let db_path = app_support_dir().join("inkwell.db");
     let conn = Connection::open(db_path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -133,6 +133,15 @@ pub fn init_db() -> Result<Connection> {
     Ok(conn)
 }
 
+/// Open a persistent connection for the writer thread. Unlike `init_db`, this
+/// is meant to be called **once** and the connection kept alive for the app's
+/// lifetime, avoiding the per-keystroke open/close overhead that starved the
+/// CGEventTap callback.
+pub fn open_connection() -> Result<Connection> {
+    init_db()
+}
+
+#[allow(dead_code)]
 pub fn insert_keystroke(
     timestamp: &str,
     app_name: &str,
@@ -140,6 +149,18 @@ pub fn insert_keystroke(
     key_code: i64,
 ) -> Result<()> {
     let conn = init_db()?;
+    insert_keystroke_with(&conn, timestamp, app_name, key_char, key_code)
+}
+
+/// Insert a keystroke using an existing (persistent) connection.  The caller
+/// is responsible for opening the connection once and keeping it alive.
+pub fn insert_keystroke_with(
+    conn: &Connection,
+    timestamp: &str,
+    app_name: &str,
+    key_char: &str,
+    key_code: i64,
+) -> Result<()> {
     let enc = encrypt(key_char);
     conn.execute(
         "INSERT INTO keystrokes (timestamp, app_name, key_char, key_code) VALUES (?1, ?2, ?3, ?4)",

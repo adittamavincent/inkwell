@@ -355,13 +355,14 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
         }
     };
 
-    // After every message, refresh the selectable text editor — but only when
-    // the underlying text has actually changed. Replacing the Content kills the
-    // editor's internal state (focus, selection, cursor), so we use
-    // perform(Paste) to update in-place instead.
+    // After every message, refresh the text editor when the underlying text
+    // has changed.  We replace the Content wholesale and paste into it —
+    // cheaper and correct (Paste at cursor would *append* the full preview
+    // every time, causing duplicated/garbled output).
     let new_preview = preview_text(state);
     if new_preview != state.last_preview {
         use std::sync::Arc;
+        state.editor_content = text_editor::Content::default();
         state.editor_content.perform(text_editor::Action::Edit(
             text_editor::Edit::Paste(Arc::new(new_preview.clone())),
         ));

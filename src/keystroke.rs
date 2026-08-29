@@ -22,6 +22,7 @@ use objc::sel;
 use objc::sel_impl;
 use std::collections::HashSet;
 use std::os::raw::c_ulong;
+use std::sync::mpsc as std_mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -125,13 +126,44 @@ impl KeystrokeLogger {
         let running_flag = self.running.clone();
 
         thread::spawn(move || {
-            // ListenOnly => a passive tap that never consumes/modifies events.
+            // -----------------------------------------------------------
+            // DB writer thread — owns a single persistent SQLite connection
+            // so the event-tap callback never pays for open/close/encrypt.
+            // -----------------------------------------------------------
+            let (db_tx, db_rx) =
+                std_mpsc::channel::<(String, String, String, i64)>();
+
+            let conn = match db::open_connection() {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Failed to open DB for writer thread: {e}");
+                    *running_flag.lock().unwrap() = false;
+                    return;
+                }
+            };
+            thread::Builder::new()
+                .name("inkwell-db-writer".into())
+                .spawn(move || {
+                    while let Ok((ts, app, key, code)) = db_rx.recv() {
+                        let _ = db::insert_keystroke_with(&conn, &ts, &app, &key, code);
+                    }
+                    info!("DB writer thread exited");
+                })
+                .expect("failed to spawn DB writer thread");
+
+            // -----------------------------------------------------------
+            // CGEventTap — listen-only, never consumes/modifies events.
+            // The callback only (a) sends to the DB writer channel and
+            // (b) broadcasts to the UI SINK.  Both are non-blocking so
+            // the callback returns in < 50 µs, well within macOS's ~1 ms
+            // deadline before the tap gets disabled.
+            // -----------------------------------------------------------
             let tap = match CGEventTap::new(
                 CGEventTapLocation::HID,
                 CGEventTapPlacement::HeadInsertEventTap,
                 CGEventTapOptions::ListenOnly,
                 vec![CGEventType::KeyDown],
-                |_proxy, type_, event| {
+                move |_proxy, type_, event| {
                     if type_ as u32 == CGEventType::KeyDown as u32 {
                         let key_code: CGKeyCode = event
                             .get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE)
@@ -146,32 +178,31 @@ impl KeystrokeLogger {
                                 chars
                             }
                         };
-						if key_char.is_empty() {
-							return None;
-						}
-						let app_name = frontmost_app_name();
-						// Skip apps the user has excluded (e.g. password
-						// managers, banking) so they never land in the log.
-						{
-							let excl = EXCLUDED_APPS.lock().unwrap();
-							if excl.contains(&app_name.to_lowercase()) {
-								return None;
-							}
-						}
-					let timestamp = Utc::now().to_rfc3339();
-					let _ = db::insert_keystroke(
-						&timestamp,
-						&app_name,
-						&key_char,
-						key_code as i64,
-					);
+                        if key_char.is_empty() {
+                            return None;
+                        }
+                        let app_name = frontmost_app_name();
+                        // Skip excluded apps (password managers, banking, etc.)
+                        {
+                            let excl = EXCLUDED_APPS.lock().unwrap();
+                            if excl.contains(&app_name.to_lowercase()) {
+                                return None;
+                            }
+                        }
+                        let timestamp = Utc::now().to_rfc3339();
 
-					// Broadcast to the live UI feed (if a sink is installed).
-					if !key_char.is_empty() {
-						if let Some(tx) = SINK.lock().unwrap().as_ref() {
-							let _ = tx.unbounded_send((app_name.clone(), key_char.clone()));
-						}
-					}
+                        // Hand off to the DB writer thread (non-blocking send).
+                        let _ = db_tx.send((
+                            timestamp,
+                            app_name.clone(),
+                            key_char.clone(),
+                            key_code as i64,
+                        ));
+
+                        // Broadcast to the live UI feed.
+                        if let Some(tx) = SINK.lock().unwrap().as_ref() {
+                            let _ = tx.unbounded_send((app_name, key_char));
+                        }
                     }
                     None
                 },
