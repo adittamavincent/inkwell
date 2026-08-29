@@ -10,15 +10,16 @@
 // defaults are read dynamically via `sync::config_snapshot()` so nothing is
 // hardcoded here.
 
+use chrono::{Duration, Local, TimeZone, Utc};
 use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input};
-use iced::{Element, Subscription, Task};
+use iced::{Element, Length, Subscription, Task};
 
 mod db;
 mod keystroke;
 mod sync;
 
 use keystroke::KeystrokeLogger;
-use sync::CogdexSyncConfig;
+use sync::{CogdexSyncConfig, SessionPreview};
 
 /// Application state. Every Cogdex-related field mirrors a field of
 /// `CogdexSyncConfig` so the UI maps 1:1 onto the persisted config.
@@ -36,6 +37,11 @@ struct Inkwell {
     idle_timeout: String,
     /// Comma-separated app names to exclude from capture.
     excluded_apps: String,
+
+    /// Reviewed-but-not-yet-synced sessions (the privacy gate preview).
+    preview: Vec<SessionPreview>,
+    /// Summary line for the preview (counts + window).
+    preview_status: String,
 
     /// Transient status line shown at the bottom of the window.
     status: String,
@@ -59,6 +65,8 @@ enum Message {
 
     // Sync actions
     ApplyConfig,
+    LoadPreview,
+    PreviewLoaded(Result<Vec<SessionPreview>, String>),
     ForceSync,
     SyncResult(Result<String, String>),
 }
@@ -76,6 +84,8 @@ impl Default for Inkwell {
             keylog_suffix: cfg.keylog_suffix,
             idle_timeout: cfg.idle_timeout_secs.to_string(),
             excluded_apps: cfg.excluded_apps.join(", "),
+            preview: Vec::new(),
+            preview_status: String::new(),
             status: String::new(),
         }
     }
@@ -150,6 +160,34 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
         Message::ApplyConfig => {
             sync::configure(state.build_config());
             state.status = "Sync settings applied.".into();
+            Task::none()
+        }
+        Message::LoadPreview => {
+            state.preview_status = "Loading preview…".into();
+            Task::perform(async { sync::preview_unsynced() }, Message::PreviewLoaded)
+        }
+        Message::PreviewLoaded(Ok(previews)) => {
+            let sessions = previews.len();
+            let words: usize = previews.iter().map(|s| s.text.split_whitespace().count()).sum();
+            let since = sync::last_sync().unwrap_or_else(|| Utc::now() - Duration::days(1));
+            let since_str = since
+                .with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string();
+            state.preview_status = if sessions == 0 {
+                "Nothing to sync since the last sync.".into()
+            } else {
+                format!(
+                    "{} session(s) · ~{} words · since {}",
+                    sessions, words, since_str
+                )
+            };
+            state.preview = previews;
+            Task::none()
+        }
+        Message::PreviewLoaded(Err(e)) => {
+            state.preview_status = format!("Preview error: {e}");
+            state.preview = Vec::new();
             Task::none()
         }
         Message::ForceSync => {
@@ -239,6 +277,49 @@ fn view(state: &Inkwell) -> Element<'_, Message> {
     ]
     .spacing(4);
 
+    let review_header = text("Review unsynced (privacy gate)").size(16);
+    let refresh_btn = button("Refresh Preview").on_press(Message::LoadPreview);
+    let preview_summary = text(&state.preview_status).size(13);
+
+    let preview_cards: Element<Message> = if state.preview.is_empty() {
+        text("Click “Refresh Preview” to review what a sync would write.")
+            .size(13)
+            .into()
+    } else {
+        let cards: Vec<Element<Message>> = state
+            .preview
+            .iter()
+            .map(|s| {
+                let time = s.start.with_timezone(&Local).format("%H:%M").to_string();
+                let title = if s.app.is_empty() {
+                    time
+                } else {
+                    format!("{} — {}", time, s.app)
+                };
+                let body = scrollable(text(&s.text).size(13)).height(Length::Fixed(120.0));
+                container(
+                    column![text(title).size(13), body].spacing(4),
+                )
+                .padding(8)
+                .style(|_theme| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.94, 0.94, 0.96,
+                    ))),
+                    ..container::Style::default()
+                })
+                .into()
+            })
+            .collect();
+        column(cards).spacing(8).into()
+    };
+
+    let review_section = column![
+        review_header,
+        row![refresh_btn, preview_summary].spacing(12),
+        preview_cards,
+    ]
+    .spacing(8);
+
     let sync_actions = row![
         button("Apply Sync Settings").on_press(Message::ApplyConfig),
         button("Force Sync").on_press(Message::ForceSync),
@@ -258,6 +339,7 @@ fn view(state: &Inkwell) -> Element<'_, Message> {
         keylog_suffix_field,
         idle_field,
         excluded_field,
+        review_section,
         sync_actions,
         status_line,
     ]

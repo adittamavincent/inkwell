@@ -94,6 +94,18 @@ pub fn sync_to_cogdex_with(mut cfg: CogdexSyncConfig) -> Result<String, String> 
     do_sync(&cfg)
 }
 
+/// Preview the sessions that a sync would write right now, **without** touching
+/// the vault or advancing the last-sync watermark. Uses the same query window
+/// (`last_sync`) and the same grouping as `do_sync`, so the review is truthful.
+pub fn preview_unsynced() -> Result<Vec<SessionPreview>, String> {
+    let cfg = SYNC_CONFIG.lock().unwrap().clone();
+    let since = last_sync()
+        .map(|d| d.to_rfc3339())
+        .unwrap_or_else(|| (Utc::now() - Duration::days(1)).to_rfc3339());
+    let rows = db::query_sessions_since(&since).map_err(|e| e.to_string())?;
+    Ok(group_sessions(rows, cfg.idle_timeout_secs))
+}
+
 fn do_sync(cfg: &CogdexSyncConfig) -> Result<String, String> {
     if !cfg.enabled {
         return Ok("Cogdex sync is disabled (opt-in). Nothing to do.".to_string());
@@ -102,7 +114,7 @@ fn do_sync(cfg: &CogdexSyncConfig) -> Result<String, String> {
         return Err("Cogdex vault path is not configured.".to_string());
     }
 
-    let since = read_last_sync()
+    let since = last_sync()
         .map(|d| d.to_rfc3339())
         .unwrap_or_else(|| (Utc::now() - Duration::days(1)).to_rfc3339());
     let rows = db::query_sessions_since(&since).map_err(|e| e.to_string())?;
@@ -131,6 +143,16 @@ fn do_sync(cfg: &CogdexSyncConfig) -> Result<String, String> {
     ))
 }
 
+/// A single grouped, reconstructed typing session. Returned by `group_sessions`
+/// and shared by both the sync writer and the preview UI, so what you review is
+/// exactly what `do_sync` will write.
+#[derive(Clone, Debug)]
+pub struct SessionPreview {
+    pub start: DateTime<Utc>,
+    pub app: String,
+    pub text: String,
+}
+
 struct Session {
     start: String,
     /// Timestamp of the most recent keystroke in this session. Session-splitting
@@ -140,10 +162,17 @@ struct Session {
     tokens: Vec<String>,
 }
 
-/// Group raw keystroke rows into typing sessions: a new session starts when the
-/// frontmost app changes or when the gap since the *previous keystroke* exceeds
-/// `idle_timeout_secs`.
-fn build_session_blocks(rows: Vec<(String, String, String)>, idle_timeout: u64) -> Vec<String> {
+/// Group raw keystroke rows into typing sessions using the exact same rules that
+/// `do_sync` uses: a new session starts when the frontmost app changes or when
+/// the gap since the *previous keystroke* exceeds `idle_timeout_secs`. Each
+/// session is reconstructed into the final text via `reconstruct_text`.
+///
+/// This is the single source of truth for grouping — both the sync writer and the
+/// preview UI call it, so the preview can never lie about what will be synced.
+pub fn group_sessions(
+    rows: Vec<(String, String, String)>,
+    idle_timeout: u64,
+) -> Vec<SessionPreview> {
     let idle = Duration::seconds(idle_timeout as i64);
     let mut sessions: Vec<Session> = Vec::new();
 
@@ -185,17 +214,34 @@ fn build_session_blocks(rows: Vec<(String, String, String)>, idle_timeout: u64) 
         if text.trim().is_empty() {
             continue;
         }
-        let header_time = parse_ts(&s.start)
-            .map(|d| d.with_timezone(&Local).format("%H:%M").to_string())
-            .unwrap_or_default();
-        let header = if s.app.is_empty() {
-            format!("## {}", header_time)
-        } else {
-            format!("## {} — {}", header_time, s.app)
-        };
-        out.push(format!("{}\n\n{}\n", header, text));
+        let start = parse_ts(&s.start).unwrap_or_else(Utc::now);
+        out.push(SessionPreview {
+            start,
+            app: s.app,
+            text,
+        });
     }
     out
+}
+
+/// Format grouped sessions into the markdown blocks appended below the boundary.
+fn build_session_blocks(rows: Vec<(String, String, String)>, idle_timeout: u64) -> Vec<String> {
+    group_sessions(rows, idle_timeout)
+        .into_iter()
+        .map(|s| {
+            let header_time = s
+                .start
+                .with_timezone(&Local)
+                .format("%H:%M")
+                .to_string();
+            let header = if s.app.is_empty() {
+                format!("## {}", header_time)
+            } else {
+                format!("## {} — {}", header_time, s.app)
+            };
+            format!("{}\n\n{}\n", header, s.text)
+        })
+        .collect()
 }
 
 fn parse_ts(s: &str) -> Option<DateTime<Utc>> {
@@ -233,7 +279,10 @@ fn last_sync_path() -> std::path::PathBuf {
     db::app_support_dir().join("last_sync.txt")
 }
 
-fn read_last_sync() -> Option<DateTime<Utc>> {
+/// The lower bound of the sync window: the timestamp of the last successful sync,
+/// or 24h ago if none. Shared by `do_sync` and `preview_unsynced` so the preview
+/// window matches the real sync window exactly.
+pub fn last_sync() -> Option<DateTime<Utc>> {
     fs::read_to_string(last_sync_path())
         .ok()
         .and_then(|s| DateTime::parse_from_rfc3339(s.trim()).map(|d| d.with_timezone(&Utc)).ok())

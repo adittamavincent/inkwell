@@ -49,6 +49,11 @@ keylog suffix, and idle timeout are all configurable from the app's UI.
   common password managers excluded by default).
 - **Encrypted at rest** – captured keystrokes are stored AES‑256‑GCM encrypted
   on disk.
+- **Privacy‑gate preview** – before committing anything, hit *Refresh Preview* to
+  review exactly what a sync *would* write: the same query window, idle‑timeout
+  grouping, and app exclusions as the real *Force Sync*. Already‑excluded apps
+  (e.g. password managers) never appear, which is your visual proof the filter
+  works at capture time.
 - **Smart reconstruction** – backspaces, word deletions, and line clears are
   merged so the resulting log mirrors what you actually typed.
 - **Optional Cogdex sync** – append sessions to the Cogdex-managed daily keylog
@@ -119,6 +124,13 @@ the fields of `sync::CogdexSyncConfig` (defaults are read dynamically via
 
 Press *Apply Sync Settings* to persist, then *Force Sync* to push captured
 keystrokes into today's keylog note (below the `LOG-BELOW` marker).
+
+**Review before you sync.** Click *Refresh Preview* to load a read‑only list of the
+sessions that fall inside the current sync window. Each card shows the start time,
+the source app, and the reconstructed text — identical to what *Force Sync* will
+append. Use it as a privacy gate: only press *Force Sync* once you've reviewed the
+list. The preview never advances the last‑sync watermark, so refreshing is safe to
+do repeatedly.
 
 ---
 
