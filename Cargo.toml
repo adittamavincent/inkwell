@@ -28,6 +28,9 @@ product-name = "Inkwell"
 identifier = "com.inkwell.app"
 category = "Utility"
 formats = ["app", "dmg"]
-# cargo-packager does not build for us; let it compile the release binary first.
-before-packaging-command = "cargo build --release"
+# Pin the target so the release binary always lands in
+# target/aarch64-apple-darwin/release, which is what cargo-packager looks for
+# (this Mac is Apple Silicon, so aarch64 is the host triple anyway).
+target-triple = "aarch64-apple-darwin"
+before-packaging-command = "cargo build --release --target aarch64-apple-darwin"
 icons = ["icons/icon.icns"]

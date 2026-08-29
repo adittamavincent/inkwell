@@ -10,7 +10,7 @@
 // defaults are read dynamically via `sync::config_snapshot()` so nothing is
 // hardcoded here.
 
-use chrono::{Duration, Local, TimeZone, Utc};
+use chrono::{Duration, Local, Utc};
 use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input};
 use iced::{Element, Length, Subscription, Task};
 
