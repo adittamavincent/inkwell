@@ -19,7 +19,7 @@ use iced::border;
 use iced::time;
 use iced::widget::{
     button, checkbox, column, container, horizontal_space, row, rule, scrollable, text,
-    text_editor, text_input, Space,
+    text_input, Space,
 };
 use iced::{Background, Color, Element, Length, Subscription, Task, Theme};
 use iced::futures::channel::mpsc::unbounded;
@@ -93,11 +93,8 @@ struct Inkwell {
 
     /// Transient status for sync actions (shown in the config panel).
     sync_status: String,
-
-    /// Selectable read-only text editor for the history view.
-    editor_content: text_editor::Content,
-    /// Last preview text — only rebuild `editor_content` when this changes.
-    last_preview: String,
+    /// Rendered preview text for display in the history pane.
+    preview_cache: String,
 }
 
 #[derive(Debug, Clone)]
@@ -108,7 +105,6 @@ enum Message {
     Keystroke((String, String)),
     ClearHistory,
     CopyPreview,
-    EditorAction(text_editor::Action),
     TrayMenu(String),
     ToggleSide,
     Tick,
@@ -129,6 +125,15 @@ enum Message {
 impl Default for Inkwell {
     fn default() -> Self {
         let cfg = sync::config_snapshot();
+        let history = load_history_from_db();
+        let mut initial_preview = String::new();
+        for s in &history {
+            let t = s.start.with_timezone(&Local).format("%H:%M:%S").to_string();
+            let app = if s.app.is_empty() { "Unknown" } else { &s.app };
+            initial_preview.push_str(&format!("{} · {}\n", t, app));
+            initial_preview.push_str(&humanize_tokens(&s.text));
+            initial_preview.push('\n');
+        }
         Inkwell {
             running: true,
             enabled: cfg.enabled,
@@ -138,7 +143,7 @@ impl Default for Inkwell {
             keylog_suffix: cfg.keylog_suffix,
             idle_timeout: cfg.idle_timeout_secs.to_string(),
             excluded_apps: cfg.excluded_apps.join(", "),
-            history: load_history_from_db(),
+            history,
             live_tokens: Vec::new(),
             live_app: String::new(),
             live_start: None,
@@ -148,8 +153,7 @@ impl Default for Inkwell {
             side_width: 0.0,
             animating: false,
             sync_status: String::new(),
-            editor_content: text_editor::Content::default(),
-            last_preview: String::new(),
+            preview_cache: initial_preview,
         }
     }
 }
@@ -327,15 +331,7 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::EditorAction(action) => {
-            match action {
-                text_editor::Action::Edit(_) => {} // Block edits — read-only
-                _ => state.editor_content.perform(action),
-            }
-            Task::none()
-        }
-
-        Message::CopyPreview => iced::clipboard::write(preview_text(state)),
+        Message::CopyPreview => iced::clipboard::write(state.preview_cache.clone()),
 
         Message::TrayMenu(id) => {
             match id.as_str() {
@@ -358,19 +354,7 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
 
     };
 
-    // After every message, refresh the text editor when the underlying text
-    // has changed.  We replace the Content wholesale and paste into it —
-    // cheaper and correct (Paste at cursor would *append* the full preview
-    // every time, causing duplicated/garbled output).
-    let new_preview = preview_text(state);
-    if new_preview != state.last_preview {
-        use std::sync::Arc;
-        state.editor_content = text_editor::Content::default();
-        state.editor_content.perform(text_editor::Action::Edit(
-            text_editor::Edit::Paste(Arc::new(new_preview.clone())),
-        ));
-        state.last_preview = new_preview;
-    }
+    state.preview_cache = preview_text(state);
     task
 }
 
@@ -528,11 +512,33 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
     .padding([12, 16])
     .style(panel(C_PANEL));
 
-    let editor = text_editor(&state.editor_content)
-        .on_action(Message::EditorAction)
-        .height(Length::Fill);
+    let display_text = if state.preview_cache.is_empty() {
+        "No keystrokes recorded yet."
+    } else {
+        &state.preview_cache
+    };
 
-    column![header, editor]
+    let content = container(
+        scrollable(
+            container(
+                text(display_text)
+                    .size(13)
+                    .color(if state.preview_cache.is_empty() {
+                        col(C_MUTED)
+                    } else {
+                        col(C_TEXT)
+                    })
+            )
+            .padding(16)
+            .width(Length::Fill)
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+    )
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    column![header, content]
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -569,163 +575,7 @@ fn config_pane(state: &Inkwell, width: f32) -> Element<'_, Message> {
                 .width(Length::Shrink),
         ]
         .spacing(8)
-        .width(Length::Fill),                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-                //
-
+        .width(Length::Fill),
     ]
     .spacing(12)
     .padding(16)
@@ -973,16 +823,34 @@ fn tray_subscription() -> Subscription<Message> {
     Subscription::run_with_id(TrayEvents, tray_stream().map(Message::TrayMenu))
 }
 
-/// Build the full decorated preview text (time + app headers + body). Used by
-/// the Copy action and mirrors what `history_pane` renders.
+/// Translate internal symbol control characters into clean ASCII/human-readable labels
+/// for UI rendering, preventing missing-glyph (.notdef tofu) rendering in iced.
+fn humanize_tokens(text: &str) -> String {
+    text.replace('⌫', "[Bksp]")
+        .replace('⌦', "[Del]")
+        .replace('↵', "\n")
+        .replace('⇥', "[Tab]")
+        .replace('⌘', "[Cmd]")
+        .replace('⇧', "[Shift]")
+        .replace('⌥', "[Opt]")
+        .replace('←', "←")
+        .replace('→', "→")
+        .replace('↑', "↑")
+        .replace('↓', "↓")
+}
+
+/// Format a single history session item.
+fn format_session(s: &SessionPreview) -> String {
+    let t = s.start.with_timezone(&Local).format("%H:%M:%S").to_string();
+    let app = if s.app.is_empty() { "Unknown" } else { &s.app };
+    format!("{} · {}\n{}\n", t, app, humanize_tokens(&s.text))
+}
+
+/// Build the full decorated preview text (time + app headers + body).
 fn preview_text(state: &Inkwell) -> String {
     let mut out = String::new();
     for s in &state.history {
-        let t = s.start.with_timezone(&Local).format("%H:%M:%S").to_string();
-        let app = if s.app.is_empty() { "Unknown" } else { &s.app };
-        out.push_str(&format!("{} · {}\n", t, app));
-        out.push_str(&s.text);
-        out.push('\n');
+        out.push_str(&format_session(s));
     }
     if !state.live_text.trim().is_empty() {
         let t = state
@@ -997,7 +865,7 @@ fn preview_text(state: &Inkwell) -> String {
             &state.live_app
         };
         out.push_str(&format!("{} · {} (live)\n", t, app));
-        out.push_str(&state.live_text);
+        out.push_str(&humanize_tokens(&state.live_text));
         out.push('\n');
     }
     out

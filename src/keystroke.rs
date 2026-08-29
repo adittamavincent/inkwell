@@ -8,6 +8,7 @@
 // `LOG-BELOW` boundary) lives in `sync.rs`.
 
 use chrono::Utc;
+use core_foundation::base::TCFType;
 use core_foundation::runloop::{CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode};
 use core_graphics::event::{
     CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
@@ -65,9 +66,31 @@ pub fn set_excluded_apps(apps: Vec<String>) {
     }
 }
 
+lazy_static::lazy_static! {
+    static ref CACHED_FRONT_APP: Mutex<(String, std::time::Instant)> =
+        Mutex::new((String::new(), std::time::Instant::now() - Duration::from_secs(10)));
+}
+
 /// Resolve the localized name of the currently frontmost application via
-/// AppKit's `NSWorkspace`. Returns `"Unknown"` if it can't be determined.
+/// AppKit's `NSWorkspace`. Cached for 250ms to keep the event tap callback < 5µs
+/// and avoid synchronous IPC latency on every keystroke.
 fn frontmost_app_name() -> String {
+    let now = std::time::Instant::now();
+    if let Ok(mut cache) = CACHED_FRONT_APP.try_lock() {
+        if !cache.0.is_empty() && now.duration_since(cache.1) < Duration::from_millis(250) {
+            return cache.0.clone();
+        }
+        let resolved = query_frontmost_app();
+        cache.0 = resolved.clone();
+        cache.1 = now;
+        resolved
+    } else {
+        // If locked by another query, return existing cached value or "Unknown" immediately
+        "Unknown".to_string()
+    }
+}
+
+fn query_frontmost_app() -> String {
     unsafe {
         let cls = match Class::get("NSWorkspace") {
             Some(c) => c as *const Class as *mut Class,
@@ -102,6 +125,7 @@ extern "C" {
         out_string_length: *mut c_ulong,
         unicode_string: *mut u16,
     );
+    fn CGEventTapEnable(tap: core_foundation::mach_port::CFMachPortRef, enable: bool);
 }
 
 #[derive(Clone)]
@@ -158,12 +182,30 @@ impl KeystrokeLogger {
             // the callback returns in < 50 µs, well within macOS's ~1 ms
             // deadline before the tap gets disabled.
             // -----------------------------------------------------------
+            let tap_mach_port = Arc::new(Mutex::new(0 as usize));
+            let tap_mach_port_cb = tap_mach_port.clone();
+
             let tap = match CGEventTap::new(
-                CGEventTapLocation::HID,
+                CGEventTapLocation::Session,
                 CGEventTapPlacement::HeadInsertEventTap,
                 CGEventTapOptions::ListenOnly,
-                vec![CGEventType::KeyDown],
+                vec![
+                    CGEventType::KeyDown,
+                    CGEventType::TapDisabledByTimeout,
+                    CGEventType::TapDisabledByUserInput,
+                ],
                 move |_proxy, type_, event| {
+                    if type_ as u32 == CGEventType::TapDisabledByTimeout as u32
+                        || type_ as u32 == CGEventType::TapDisabledByUserInput as u32
+                    {
+                        let port_ptr = *tap_mach_port_cb.lock().unwrap();
+                        if port_ptr != 0 {
+                            unsafe {
+                                CGEventTapEnable(port_ptr as core_foundation::mach_port::CFMachPortRef, true);
+                            }
+                        }
+                        return None;
+                    }
                     if type_ as u32 == CGEventType::KeyDown as u32 {
                         let key_code: CGKeyCode = event
                             .get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE)
@@ -227,6 +269,7 @@ impl KeystrokeLogger {
                     return;
                 }
             }
+            *tap_mach_port.lock().unwrap() = tap.mach_port.as_concrete_TypeRef() as usize;
             tap.enable();
 
             // Poll the run loop in short slices so `stop()` can break out
@@ -234,9 +277,16 @@ impl KeystrokeLogger {
             while *running_flag.lock().unwrap() {
                 CFRunLoop::run_in_mode(
                     unsafe { kCFRunLoopDefaultMode },
-                    Duration::from_millis(200),
+                    Duration::from_millis(100),
                     false,
                 );
+            }
+            tap.enable(); // ensure state is clean
+            let port_ptr = *tap_mach_port.lock().unwrap();
+            if port_ptr != 0 {
+                unsafe {
+                    CGEventTapEnable(port_ptr as core_foundation::mach_port::CFMachPortRef, false);
+                }
             }
             info!("Keystroke tap stopped");
         });
