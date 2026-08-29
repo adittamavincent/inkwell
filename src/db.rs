@@ -174,3 +174,29 @@ pub fn query_recent_sessions(days: i64) -> Result<Vec<(String, String, String)>>
     let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
     query_sessions_since(&cutoff.to_rfc3339())
 }
+
+/// All captured keystrokes, oldest first. Used by the live DB preview pane.
+pub fn query_all_keystrokes() -> Result<Vec<(String, String, String)>> {
+    let conn = init_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT timestamp, app_name, key_char FROM keystrokes ORDER BY timestamp ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let ts: String = row.get(0)?;
+        let app: String = row.get(1)?;
+        let enc: String = row.get(2)?;
+        Ok((ts, app, decrypt(&enc)))
+    })?;
+    let mut results = Vec::new();
+    for r in rows {
+        results.push(r?);
+    }
+    Ok(results)
+}
+
+/// Delete every captured keystroke. Used by the UI "Clear" action.
+pub fn clear_all_keystrokes() -> Result<()> {
+    let conn = init_db()?;
+    conn.execute("DELETE FROM keystrokes", [])?;
+    Ok(())
+}

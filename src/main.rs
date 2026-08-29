@@ -41,7 +41,6 @@ const C_SIDEBAR: (f32, f32, f32) = (0.082, 0.082, 0.098);
 const C_PANEL: (f32, f32, f32) = (0.122, 0.122, 0.141);
 const C_CARD: (f32, f32, f32) = (0.165, 0.165, 0.192);
 const C_ACCENT: (f32, f32, f32) = (0.486, 0.361, 1.0);
-const C_ACCENT_DIM: (f32, f32, f32) = (0.33, 0.25, 0.62);
 const C_DANGER: (f32, f32, f32) = (0.85, 0.27, 0.32);
 const C_TEXT: (f32, f32, f32) = (0.902, 0.902, 0.918);
 const C_MUTED: (f32, f32, f32) = (0.604, 0.604, 0.639);
@@ -81,7 +80,7 @@ struct Inkwell {
     idle_timeout: String,
     excluded_apps: String,
 
-    /// Completed typing sessions (oldest first) shown in the history feed.
+    /// Completed typing sessions (oldest first), seeded from the DB.
     history: Vec<SessionPreview>,
     /// In-progress session tokens (so we can re-run the reconstructor live).
     live_tokens: Vec<String>,
@@ -97,8 +96,8 @@ struct Inkwell {
     /// True while the collapse/expand animation is in flight.
     animating: bool,
 
-    /// Transient status line shown at the bottom of the window.
-    status: String,
+    /// Transient status for sync actions (shown in the config panel).
+    sync_status: String,
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +107,9 @@ enum Message {
     LogStatus(String),
     Keystroke((String, String)),
     ClearHistory,
+    CopyPreview,
+    Copied,
+    TrayMenu(String),
     ToggleSide,
     Tick,
 
@@ -136,7 +138,7 @@ impl Default for Inkwell {
             keylog_suffix: cfg.keylog_suffix,
             idle_timeout: cfg.idle_timeout_secs.to_string(),
             excluded_apps: cfg.excluded_apps.join(", "),
-            history: Vec::new(),
+            history: load_history_from_db(),
             live_tokens: Vec::new(),
             live_app: String::new(),
             live_start: None,
@@ -145,7 +147,7 @@ impl Default for Inkwell {
             side_open: false,
             side_width: 0.0,
             animating: false,
-            status: String::new(),
+            sync_status: String::new(),
         }
     }
 }
@@ -167,7 +169,22 @@ impl Inkwell {
                 .collect(),
         }
     }
+}
 
+// ---------------------------------------------------------------------------
+// History (DB-backed, updated live)
+// ---------------------------------------------------------------------------
+/// Seed the in-memory history from the captured DB so the panel is populated the
+/// moment the app opens. Live keystrokes are appended on top of this as they
+/// arrive, so the view updates in real time without re-scanning the DB.
+fn load_history_from_db() -> Vec<SessionPreview> {
+    match db::query_all_keystrokes() {
+        Ok(rows) => sync::group_sessions(rows, 60),
+        Err(_) => Vec::new(),
+    }
+}
+
+impl Inkwell {
     fn reset_live(&mut self) {
         self.live_tokens.clear();
         self.live_app.clear();
@@ -181,26 +198,26 @@ impl Inkwell {
 // Update
 // ---------------------------------------------------------------------------
 fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
+    // Keep the menu-bar indicator in sync with the capture state.
+    let _ = TRAY.get_or_init(|| TrayPtr(build_tray(state.running)));
     match message {
         Message::StartLogger => {
             state.running = true;
             state.reset_live();
-            state.history.clear();
-            state.status = "Starting keystroke tap…".into();
+            refresh_tray(true);
             Task::none()
         }
         Message::StopLogger => {
             state.running = false;
-            state.status = "Keystroke tap stopped.".into();
+            refresh_tray(false);
             Task::none()
         }
-        Message::LogStatus(s) => {
-            state.status = s;
-            Task::none()
-        }
+        Message::LogStatus(_s) => Task::none(),
         Message::ClearHistory => {
-            state.history.clear();
-            state.reset_live();
+            if db::clear_all_keystrokes().is_ok() {
+                state.history.clear();
+                state.reset_live();
+            }
             Task::none()
         }
 
@@ -229,8 +246,9 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             let idle = state.idle_timeout.trim().parse::<i64>().unwrap_or(60);
             let now = Local::now();
 
-            // Start a new "session" when the app changes or we've been idle
-            // longer than the configured gap.
+            // Start a new session when the app changes or we've been idle longer
+            // than the configured gap. The DB is the source of truth for history;
+            // this in-memory reconstruction just keeps the live view instant.
             let new_session = state.live_start.is_none()
                 || state.live_app != app
                 || match state.last_tick {
@@ -291,19 +309,37 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
 
         Message::ApplyConfig => {
             sync::configure(state.build_config());
-            state.status = "Sync settings applied.".into();
+            state.sync_status = "Sync settings applied.".into();
             Task::none()
         }
         Message::ForceSync => {
-            state.status = "Syncing…".into();
+            state.sync_status = "Syncing…".into();
             Task::perform(async { sync::sync_to_cogdex() }, Message::SyncResult)
         }
         Message::SyncResult(Ok(msg)) => {
-            state.status = msg;
+            state.sync_status = msg;
             Task::none()
         }
         Message::SyncResult(Err(e)) => {
-            state.status = format!("Sync error: {e}");
+            state.sync_status = format!("Sync error: {e}");
+            Task::none()
+        }
+
+        Message::CopyPreview => iced::clipboard::write::<()>(preview_text(state)).map(|_| Message::Copied),
+        Message::Copied => Task::none(),
+
+        Message::TrayMenu(id) => {
+            match id.as_str() {
+                "toggle" => {
+                    state.running = !state.running;
+                    refresh_tray(state.running);
+                    if !state.running {
+                        state.reset_live();
+                    }
+                }
+                "quit" => std::process::exit(0),
+                _ => {}
+            }
             Task::none()
         }
     }
@@ -343,17 +379,6 @@ fn btn_style(accent: bool, danger: bool) -> impl Fn(&Theme, button::Status) -> b
             },
             ..button::Style::default()
         }
-    }
-}
-
-fn badge_style() -> impl Fn(&Theme) -> container::Style {
-    move |_| container::Style {
-        background: Some(Background::Color(col(C_ACCENT_DIM))),
-        border: border::Border {
-            radius: 6.0.into(),
-            ..border::Border::default()
-        },
-        ..container::Style::default()
     }
 }
 
@@ -399,32 +424,6 @@ fn field<'a>(
     .into()
 }
 
-fn bubble<'a>(start: DateTime<Utc>, app: &'a str, body: &'a str, live: bool) -> Element<'a, Message> {
-    let time = start.with_timezone(&Local).format("%H:%M:%S").to_string();
-    let app_badge = container(text(if app.is_empty() { "Unknown" } else { app }).size(12).color(col(C_TEXT)))
-        .padding([3, 8])
-        .style(badge_style());
-    let header = row![
-        app_badge,
-        text(time).size(12).color(col(C_MUTED)),
-        if live {
-            text("● live").size(11).color(col(C_ACCENT))
-        } else {
-            text("").size(11)
-        },
-        horizontal_space(),
-    ]
-    .spacing(8)
-    .align_y(iced::alignment::Vertical::Center);
-
-    let content = text(body).size(13).font(iced::Font::MONOSPACE).color(col(C_TEXT));
-
-    container(column![header, content].spacing(8))
-        .padding(12)
-        .style(panel(C_CARD))
-        .into()
-}
-
 // ---------------------------------------------------------------------------
 // Panels
 // ---------------------------------------------------------------------------
@@ -462,8 +461,6 @@ fn sidebar(state: &Inkwell) -> Element<'_, Message> {
     let legend = column![
         text("Capture").size(12).color(col(C_MUTED)),
         text(format!("Excluded apps: {}", excluded)).size(12).color(col(C_TEXT)),
-        vertical_space(),
-        text("History shows a live, chat-like feed of reconstructed typing. Select-all, backspace, arrows and word-deletes are replayed so spacing stays correct.").size(11).color(col(C_MUTED)),
     ]
     .spacing(6);
 
@@ -487,22 +484,58 @@ fn sidebar(state: &Inkwell) -> Element<'_, Message> {
 }
 
 fn history_pane(state: &Inkwell) -> Element<'_, Message> {
-    let mut entries: Vec<Element<'_, Message>> = Vec::new();
+    // Build decorated lines (time · app header, then body) and cap to the last
+    // 100 lines so the view stays light regardless of DB size.
+    let mut lines: Vec<(bool, String)> = Vec::new();
+    let push_session = |lines: &mut Vec<(bool, String)>, start: DateTime<Utc>, app: &str, body: &str, live: bool| {
+        let t = start.with_timezone(&Local).format("%H:%M:%S").to_string();
+        let app = if app.is_empty() { "Unknown" } else { app };
+        let label = if live {
+            format!("{} · {} (live)", t, app)
+        } else {
+            format!("{} · {}", t, app)
+        };
+        lines.push((true, label));
+        for l in body.lines() {
+            lines.push((false, l.to_string()));
+        }
+    };
     for s in &state.history {
-        entries.push(bubble(s.start, &s.app, &s.text, false));
+        push_session(&mut lines, s.start, &s.app, &s.text, false);
     }
     if !state.live_text.trim().is_empty() {
-        let start = state.live_start.unwrap_or_else(Utc::now);
-        entries.push(bubble(start, &state.live_app, &state.live_text, true));
+        push_session(
+            &mut lines,
+            state.live_start.unwrap_or_else(Utc::now),
+            &state.live_app,
+            &state.live_text,
+            true,
+        );
+    }
+    let len = lines.len();
+    if len > 100 {
+        lines.drain(0..len - 100);
     }
 
-    let feed: Element<'_, Message> = if entries.is_empty() {
+    let line_elems: Vec<Element<'_, Message>> = lines
+        .iter()
+        .map(|(header, l)| {
+            let l = l.clone();
+            if *header {
+                el(text(l).size(11).color(col(C_MUTED)))
+            } else {
+                el(text(l).size(13).font(iced::Font::MONOSPACE).color(col(C_TEXT)))
+            }
+        })
+        .collect();
+
+    let feed: Element<'_, Message> = if line_elems.is_empty() {
         column![
             vertical_space(),
             el(text("No keystrokes captured yet.")
                 .size(14)
                 .color(col(C_MUTED))),
-            el(text("Press “Start Logger” and begin typing somewhere.")
+            el(text("Start typing and your captured keystrokes will appear here.")
                 .size(12)
                 .color(col(C_MUTED))),
             vertical_space(),
@@ -512,7 +545,11 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
         .height(Length::Fill)
         .into()
     } else {
-        column(entries).spacing(10).padding(16).width(Length::Fill).into()
+        column(line_elems)
+            .spacing(2)
+            .padding(16)
+            .width(Length::Fill)
+            .into()
     };
 
     let side_toggle = button(text(if state.side_open { "▸ Sync" } else { "◂ Sync" }).size(13))
@@ -523,8 +560,13 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
         row![
             text("History").size(18).color(col(C_TEXT)),
             horizontal_space(),
+            button(text("Copy").size(13))
+                .on_press(Message::CopyPreview)
+                .style(btn_style(false, false)),
             side_toggle,
-            button(text("Clear").size(13)).on_press(Message::ClearHistory).style(btn_style(false, false)),
+            button(text("Clear").size(13))
+                .on_press(Message::ClearHistory)
+                .style(btn_style(false, false)),
         ]
         .spacing(10)
         .align_y(iced::alignment::Vertical::Center),
@@ -566,6 +608,9 @@ fn config_pane(state: &Inkwell, width: f32) -> Element<'_, Message> {
             .on_press(Message::ForceSync)
             .style(btn_style(true, false))
             .width(Length::Fill),
+        text(&state.sync_status)
+            .size(12)
+            .color(col(C_MUTED)),
     ]
     .spacing(12)
     .padding(16)
@@ -596,19 +641,7 @@ fn view(state: &Inkwell) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let status_bar = container(
-        text(if state.status.is_empty() {
-            "Ready."
-        } else {
-            &state.status
-        })
-        .size(12)
-        .color(col(C_MUTED)),
-    )
-    .padding([8, 16])
-    .style(panel(C_SIDEBAR));
-
-    container(column![content, status_bar].spacing(1).height(Length::Fill))
+    container(column![content].spacing(1).height(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
         .style(panel(C_BG))
@@ -632,6 +665,9 @@ fn subscription(state: &Inkwell) -> Subscription<Message> {
     if state.animating {
         subs.push(time::every(std::time::Duration::from_millis(8)).map(|_| Message::Tick));
     }
+
+    // macOS menu-bar / system-tray indicator (click events → update).
+    subs.push(tray_subscription());
 
     Subscription::batch(subs)
 }
@@ -674,6 +710,183 @@ fn keystroke_stream() -> impl iced::futures::Stream<Item = Message> {
 }
 
 type UnboundedRx = iced::futures::channel::mpsc::UnboundedReceiver<(String, String)>;
+
+// ---------------------------------------------------------------------------
+// macOS menu-bar / system-tray indicator
+// ---------------------------------------------------------------------------
+// The tray icon is created lazily inside `update` (which runs on the main
+// thread, after iced's event loop is live) — the only safe place to create a
+// `TrayIcon` on macOS per the tray-icon docs, since the event loop must already
+// be running. It works cross-platform (macOS status bar, Windows tray, Linux
+// appindicator). The icon colour + tooltip + menu label mirror the capture
+// state, and the menu can start/stop logging or quit the app.
+use tray_icon::{
+    menu::{Menu, MenuItem},
+    Icon, TrayIconBuilder,
+};
+use std::sync::OnceLock;
+
+struct TrayState {
+    icon: tray_icon::TrayIcon,
+    toggle_item: MenuItem,
+    last_running: std::cell::Cell<bool>,
+}
+
+// The `TrayIcon`/`MenuItem` types are `!Sync` (they wrap `Rc` internally), so
+// they can't live in a `Sync` static directly. We store a raw pointer instead
+// (the icon is leaked via `Box::into_raw` so it stays alive for the app's
+// lifetime) and dereference it only from the main thread.
+struct TrayPtr(*mut TrayState);
+// SAFETY: the pointer is only dereferenced on the main thread.
+unsafe impl Send for TrayPtr {}
+unsafe impl Sync for TrayPtr {}
+static TRAY: OnceLock<TrayPtr> = OnceLock::new();
+
+/// A small filled-circle RGBA icon: green while capturing, grey when stopped.
+fn tray_icon_rgba(active: bool) -> Icon {
+    let size = 32u32;
+    let mut rgba = vec![0u8; (size * size * 4) as usize];
+    let (r, g, b) = if active {
+        (74u8, 217u8, 115u8)
+    } else {
+        (153u8, 153u8, 153u8)
+    };
+    let cx = size as f32 / 2.0;
+    let cy = size as f32 / 2.0;
+    let rad = size as f32 / 2.0 - 2.0;
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f32 - cx;
+            let dy = y as f32 - cy;
+            if dx * dx + dy * dy <= rad * rad {
+                let i = ((y * size + x) * 4) as usize;
+                rgba[i] = r;
+                rgba[i + 1] = g;
+                rgba[i + 2] = b;
+                rgba[i + 3] = 255;
+            }
+        }
+    }
+    Icon::from_rgba(rgba, size, size).expect("valid tray icon")
+}
+
+fn build_tray(running: bool) -> *mut TrayState {
+    let toggle_item = MenuItem::with_id(
+        "toggle",
+        if running { "Stop Logger" } else { "Start Logger" },
+        true,
+        None,
+    );
+    let quit_item = MenuItem::with_id("quit", "Quit Inkwell", true, None);
+    let menu = Menu::new();
+    if menu.append(&toggle_item).is_err() || menu.append(&quit_item).is_err() {
+        return std::ptr::null_mut();
+    }
+    let tray = TrayIconBuilder::new()
+        .with_menu(Box::new(menu))
+        .with_tooltip(if running {
+            "Inkwell — capturing"
+        } else {
+            "Inkwell — stopped"
+        })
+        .with_icon(tray_icon_rgba(running))
+        .build();
+    let Ok(tray) = tray else {
+        eprintln!("Inkwell: failed to create tray icon: {:?}", tray.err());
+        return std::ptr::null_mut();
+    };
+    // Render our colour (not a monochrome template) so the state is visible.
+    tray.set_icon_as_template(false);
+    Box::into_raw(Box::new(TrayState {
+        icon: tray,
+        toggle_item,
+        last_running: std::cell::Cell::new(running),
+    }))
+}
+
+/// Ensure the tray exists, and reflect the capture state in its icon/label.
+fn refresh_tray(running: bool) {
+    let TrayPtr(ptr) = TRAY.get_or_init(|| TrayPtr(build_tray(running)));
+    if ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &**ptr };
+    if state.last_running.get() == running {
+        return;
+    }
+    state
+        .toggle_item
+        .set_text(if running { "Stop Logger" } else { "Start Logger" });
+    let _ = state.icon.set_icon(Some(tray_icon_rgba(running)));
+    let _ = state
+        .icon
+        .set_tooltip(Some(if running {
+            "Inkwell — capturing"
+        } else {
+            "Inkwell — stopped"
+        }));
+    state.last_running.set(running);
+}
+
+/// Forward tray-menu clicks into the iced `update` loop as `Message`s.
+///
+/// We use an mpsc channel: the global `MenuEvent` handler pushes menu IDs into
+/// the sender, and the subscription reads from the receiver. The sender is
+/// swapped each time the subscription (re)starts so events always reach the
+/// current receiver.
+use std::sync::Mutex as StdMutex;
+static TRAY_TX: StdMutex<Option<iced::futures::channel::mpsc::UnboundedSender<String>>> =
+    StdMutex::new(None);
+
+fn tray_stream() -> iced::futures::channel::mpsc::UnboundedReceiver<String> {
+    let (tx, rx) = iced::futures::channel::mpsc::unbounded::<String>();
+    *TRAY_TX.lock().unwrap() = Some(tx);
+
+    // Install the global handler so menu clicks are forwarded into our channel.
+    tray_icon::menu::MenuEvent::set_event_handler(Some(|event: tray_icon::menu::MenuEvent| {
+        if let Some(tx) = TRAY_TX.lock().unwrap().as_ref() {
+            let _ = tx.unbounded_send(event.id().clone().as_ref().to_string());
+        }
+    }));
+
+    rx
+}
+
+fn tray_subscription() -> Subscription<Message> {
+    #[derive(Hash, Clone, Copy)]
+    struct TrayEvents;
+    Subscription::run_with_id(TrayEvents, tray_stream().map(Message::TrayMenu))
+}
+
+/// Build the full decorated preview text (time + app headers + body). Used by
+/// the Copy action and mirrors what `history_pane` renders.
+fn preview_text(state: &Inkwell) -> String {
+    let mut out = String::new();
+    for s in &state.history {
+        let t = s.start.with_timezone(&Local).format("%H:%M:%S").to_string();
+        let app = if s.app.is_empty() { "Unknown" } else { &s.app };
+        out.push_str(&format!("{} · {}\n", t, app));
+        out.push_str(&s.text);
+        out.push('\n');
+    }
+    if !state.live_text.trim().is_empty() {
+        let t = state
+            .live_start
+            .unwrap_or_else(Utc::now)
+            .with_timezone(&Local)
+            .format("%H:%M:%S")
+            .to_string();
+        let app = if state.live_app.is_empty() {
+            "Unknown"
+        } else {
+            &state.live_app
+        };
+        out.push_str(&format!("{} · {} (live)\n", t, app));
+        out.push_str(&state.live_text);
+        out.push('\n');
+    }
+    out
+}
 
 fn main() -> iced::Result {
     env_logger::init();

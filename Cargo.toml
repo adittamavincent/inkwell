@@ -20,6 +20,8 @@ objc = "0.2"
 aes-gcm = "0.10"
 base64 = "0.22"
 rand = "0.8"
+# System tray / macOS menu-bar indicator (cross-platform: macOS, Windows, Linux).
+tray-icon = "0.20"
 
 # --- cargo-packager: bundles the pure-Rust binary into a native macOS .app/.dmg ---
 # (replaces the Tauri CLI bundler we dropped). Run `cargo packager --release`.

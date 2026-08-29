@@ -33,6 +33,8 @@ const DEFAULT_EXCLUDED_APPS: &[&str] = &[
     "icloud keychain",
     "keypassxc",
     "macpass",
+    // Never capture keystrokes typed into Inkwell itself.
+    "inkwell",
 ];
 
 #[derive(Clone)]
