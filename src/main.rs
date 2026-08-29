@@ -19,9 +19,8 @@ use iced::border;
 use iced::time;
 use iced::widget::{
     button, checkbox, column, container, horizontal_space, row, rule, scrollable, text,
-    text_input, vertical_space, Space,
+    text_editor, text_input, Space,
 };
-use iced::widget::scrollable::{self as scroll_mod, AbsoluteOffset, Id};
 use iced::{Background, Color, Element, Length, Subscription, Task, Theme};
 use iced::futures::channel::mpsc::unbounded;
 use iced::futures::StreamExt;
@@ -55,10 +54,6 @@ fn adjust(c: (f32, f32, f32), f: f32) -> (f32, f32, f32) {
         (c.1 * f).clamp(0.0, 1.0),
         (c.2 * f).clamp(0.0, 1.0),
     )
-}
-
-fn history_id() -> Id {
-    Id::new("history")
 }
 
 /// Target width (px) of the expanded secondary (right) panel.
@@ -98,6 +93,9 @@ struct Inkwell {
 
     /// Transient status for sync actions (shown in the config panel).
     sync_status: String,
+
+    /// Selectable read-only text editor for the history view.
+    editor_content: text_editor::Content,
 }
 
 #[derive(Debug, Clone)]
@@ -107,8 +105,7 @@ enum Message {
     LogStatus(String),
     Keystroke((String, String)),
     ClearHistory,
-    CopyPreview,
-    Copied,
+    EditorAction(text_editor::Action),
     TrayMenu(String),
     ToggleSide,
     Tick,
@@ -148,6 +145,7 @@ impl Default for Inkwell {
             side_width: 0.0,
             animating: false,
             sync_status: String::new(),
+            editor_content: text_editor::Content::default(),
         }
     }
 }
@@ -200,7 +198,7 @@ impl Inkwell {
 fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
     // Keep the menu-bar indicator in sync with the capture state.
     let _ = TRAY.get_or_init(|| TrayPtr(build_tray(state.running)));
-    match message {
+    let task = match message {
         Message::StartLogger => {
             state.running = true;
             state.reset_live();
@@ -275,7 +273,7 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             state.live_text = sync::reconstruct_text(&state.live_tokens);
             state.last_tick = Some(now);
 
-            scroll_mod::scroll_to(history_id(), AbsoluteOffset { x: 0.0, y: f32::MAX })
+            Task::none()
         }
 
         Message::ToggleEnabled(v) => {
@@ -325,8 +323,13 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::CopyPreview => iced::clipboard::write::<()>(preview_text(state)).map(|_| Message::Copied),
-        Message::Copied => Task::none(),
+        Message::EditorAction(action) => {
+            match action {
+                text_editor::Action::Edit(_) => {} // Block edits — read-only
+                _ => state.editor_content.perform(action),
+            }
+            Task::none()
+        }
 
         Message::TrayMenu(id) => {
             match id.as_str() {
@@ -342,7 +345,13 @@ fn update(state: &mut Inkwell, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-    }
+    };
+
+    // After every message, refresh the selectable text editor with the latest
+    // history. This is cheap (string formatting + Content replacement) and
+    // guarantees the editor is always in sync with the state.
+    state.editor_content = text_editor::Content::with_text(&preview_text(state));
+    task
 }
 
 // ---------------------------------------------------------------------------
@@ -484,74 +493,6 @@ fn sidebar(state: &Inkwell) -> Element<'_, Message> {
 }
 
 fn history_pane(state: &Inkwell) -> Element<'_, Message> {
-    // Build decorated lines (time · app header, then body) and cap to the last
-    // 100 lines so the view stays light regardless of DB size.
-    let mut lines: Vec<(bool, String)> = Vec::new();
-    let push_session = |lines: &mut Vec<(bool, String)>, start: DateTime<Utc>, app: &str, body: &str, live: bool| {
-        let t = start.with_timezone(&Local).format("%H:%M:%S").to_string();
-        let app = if app.is_empty() { "Unknown" } else { app };
-        let label = if live {
-            format!("{} · {} (live)", t, app)
-        } else {
-            format!("{} · {}", t, app)
-        };
-        lines.push((true, label));
-        for l in body.lines() {
-            lines.push((false, l.to_string()));
-        }
-    };
-    for s in &state.history {
-        push_session(&mut lines, s.start, &s.app, &s.text, false);
-    }
-    if !state.live_text.trim().is_empty() {
-        push_session(
-            &mut lines,
-            state.live_start.unwrap_or_else(Utc::now),
-            &state.live_app,
-            &state.live_text,
-            true,
-        );
-    }
-    let len = lines.len();
-    if len > 100 {
-        lines.drain(0..len - 100);
-    }
-
-    let line_elems: Vec<Element<'_, Message>> = lines
-        .iter()
-        .map(|(header, l)| {
-            let l = l.clone();
-            if *header {
-                el(text(l).size(11).color(col(C_MUTED)))
-            } else {
-                el(text(l).size(13).font(iced::Font::MONOSPACE).color(col(C_TEXT)))
-            }
-        })
-        .collect();
-
-    let feed: Element<'_, Message> = if line_elems.is_empty() {
-        column![
-            vertical_space(),
-            el(text("No keystrokes captured yet.")
-                .size(14)
-                .color(col(C_MUTED))),
-            el(text("Start typing and your captured keystrokes will appear here.")
-                .size(12)
-                .color(col(C_MUTED))),
-            vertical_space(),
-        ]
-        .align_x(iced::alignment::Horizontal::Center)
-        .spacing(6)
-        .height(Length::Fill)
-        .into()
-    } else {
-        column(line_elems)
-            .spacing(2)
-            .padding(16)
-            .width(Length::Fill)
-            .into()
-    };
-
     let side_toggle = button(text(if state.side_open { "▸ Sync" } else { "◂ Sync" }).size(13))
         .on_press(Message::ToggleSide)
         .style(btn_style(false, false));
@@ -560,9 +501,6 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
         row![
             text("History").size(18).color(col(C_TEXT)),
             horizontal_space(),
-            button(text("Copy").size(13))
-                .on_press(Message::CopyPreview)
-                .style(btn_style(false, false)),
             side_toggle,
             button(text("Clear").size(13))
                 .on_press(Message::ClearHistory)
@@ -574,12 +512,11 @@ fn history_pane(state: &Inkwell) -> Element<'_, Message> {
     .padding([12, 16])
     .style(panel(C_PANEL));
 
-    let body = scrollable(feed)
-        .id(history_id())
-        .width(Length::Fill)
+    let editor = text_editor(&state.editor_content)
+        .on_action(Message::EditorAction)
         .height(Length::Fill);
 
-    column![header, body]
+    column![header, editor]
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
