@@ -40,11 +40,8 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
   const handleAccessibility = async () => {
     setIsOpeningAccessibility(true);
     try {
-      if (!hasRequestedPrompt && !hasAccessibility) {
-        setHasRequestedPrompt(true);
-        await onRequestAccessibility();
-      }
       await onOpenAccessibilitySettings();
+      await onRequestAccessibility();
     } catch (err) {
       console.error('Failed to open accessibility settings:', err);
     } finally {

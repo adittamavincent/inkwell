@@ -335,7 +335,7 @@ export const App: React.FC = () => {
 
   const handleRequestAccessibility = async (): Promise<boolean> => {
     if (!window.inkwellApi) return false;
-    const granted = await window.inkwellApi.checkPermissions(true);
+    const granted = await window.inkwellApi.checkPermissions(false);
     setHasAccessibility(granted);
     if (granted) {
       window.inkwellApi.getCaptureStatus().then(setIsRunning);
