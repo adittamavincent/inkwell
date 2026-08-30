@@ -2,9 +2,9 @@
 # Inkwell — macOS release: package, Developer ID codesign, notarize, staple
 # =============================================================================
 #
-# Triggered on every pushed tag (mirrors the Cogdex plugin's release convention).
-# Produces a Developer-ID-signed, notarized, and stapled .dmg and attaches it to
-# a DRAFT GitHub Release (same draft pattern Cogdex uses).
+# Triggered on every pushed tag.
+# Produces a Developer-ID-signed, notarized, and stapled .dmg (Apple Silicon arm64)
+# and attaches it to a DRAFT GitHub Release.
 #
 # -----------------------------------------------------------------------------
 # REQUIRED GitHub repository secrets
@@ -15,22 +15,7 @@
 #   APPLE_ID                     Apple ID email used for notarization
 #   APPLE_TEAM_ID                Apple Developer Team ID
 #   APPLE_APP_SPECIFIC_PASSWORD  App-specific password for notarization
-#                                (or use APPLE_API_KEY_ID / APPLE_API_ISSUER /
-#                                 APPLE_API_KEY for API-key-based notarization
-#                                 instead — see the notarize step below)
 #   KEYCHAIN_PASSWORD            Password for the temporary keychain created here
-#
-# PREREQUISITE (cannot be worked around in CI): an active paid Apple Developer
-# Program membership ($99/yr) with a "Developer ID Application" certificate
-# already generated. Without it this pipeline CANNOT produce a Gatekeeper-clean
-# build, so it fails loudly instead of publishing an unsigned .dmg.
-#
-# NOTE on entitlements: cargo-packager enables the hardened runtime
-# (`--options runtime`) by default, which notarization requires. If Inkwell's
-# GPU/wgpu stack later trips notarization (e.g. "executable requires the
-# com.apple.security.cs.allow-unsigned-executable-memory entitlement"), add an
-# entitlements .plist and reference it via `entitlements` under
-# [package.metadata.packager.macos] in Cargo.toml.
 # =============================================================================
 
 name: Release macOS app
@@ -46,12 +31,9 @@ permissions:
 jobs:
   release:
     runs-on: macos-14
-    env:
-      # Exported job-wide so the packaging step can inject it into Cargo.toml.
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       # -----------------------------------------------------------------------
       # Guard: fail fast & loudly if any required secret is missing, so we never
@@ -79,16 +61,20 @@ jobs:
             exit 1
           fi
 
-      - name: Install Rust toolchain (stable, aarch64-apple-darwin)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Node.js (20.x)
+        uses: actions/setup-node@v4
         with:
-          targets: aarch64-apple-darwin
+          node-version: 20
+          cache: 'npm'
 
-      - name: Install cargo-packager
-        run: cargo install cargo-packager --locked
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test
 
       # -----------------------------------------------------------------------
-      # Step 4: import the Developer ID certificate into a temporary keychain.
+      # Import the Developer ID certificate into a temporary keychain.
       # -----------------------------------------------------------------------
       - name: Set up keychain and import codesign certificate
         env:
@@ -112,51 +98,23 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
 
       # -----------------------------------------------------------------------
-      # Inject the real signing identity (from the secret) into Cargo.toml.
-      # cargo-packager 0.11.x does not interpolate ${ENV} in this field, so we
-      # rewrite the committed placeholder line with the actual identity.
-      # (Avoids echoing the secret: the sed command is not printed by default.)
+      # Package (.app / .dmg) with electron-builder
       # -----------------------------------------------------------------------
-      - name: Inject signing identity into Cargo.toml
+      - name: Build & Package with electron-builder
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: true
+          CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          # cargo-packager 0.11.x does not interpolate ${ENV} in this field, so
-          # rewrite the committed placeholder line with the real identity from
-          # the secret. Done in Python to stay robust against special chars in
-          # the identity (parentheses, spaces). Quoted heredoc => no secret leak.
-          python3 - <<'PY'
-          import os, re, pathlib
-          identity = os.environ["APPLE_SIGNING_IDENTITY"]
-          p = pathlib.Path("Cargo.toml")
-          text = p.read_text()
-          text, n = re.subn(
-              r'^signing-identity = .*$',
-              f'signing-identity = "{identity}"',
-              text,
-              flags=re.M,
-          )
-          assert n == 1, f"expected exactly 1 signing-identity line, found {n}"
-          p.write_text(text)
-          PY
-
-      # -----------------------------------------------------------------------
-      # Step 5: build the binary (packager's before-packaging-command re-runs
-      # this too, but an explicit build keeps failures visible early).
-      # -----------------------------------------------------------------------
-      - name: Build binary
-        run: cargo build --release --target aarch64-apple-darwin
-
-      # -----------------------------------------------------------------------
-      # Step 6: package + Developer ID codesign the .app/.dmg.
-      # -----------------------------------------------------------------------
-      - name: Package (.app / .dmg) with Developer ID codesigning
-        run: cargo packager --release --target aarch64-apple-darwin
+          npx vite build
+          npx electron-builder --mac dmg zip --arm64
 
       # -----------------------------------------------------------------------
       # Guard: ensure the .app is genuinely Developer-ID signed (not ad-hoc).
       # -----------------------------------------------------------------------
       - name: Verify codesigning (fail if ad-hoc or unsigned)
         run: |
-          APP="target/aarch64-apple-darwin/release/Inkwell.app"
+          APP="release/mac-arm64/Inkwell.app"
           codesign --verify --strict --verbose=2 "$APP"
           INFO=$(codesign -dvv "$APP" 2>&1)
           if echo "$INFO" | grep -qi "Ad-hoc"; then
@@ -169,50 +127,36 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # Step 7: notarize the .dmg.
+      # Notarize the .dmg with Apple notarytool
       # -----------------------------------------------------------------------
-      - name: Store notarytool credentials
+      - name: Store notarytool credentials & Notarize
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          # App-specific password flow. For API-key notarization instead, drop
-          # this step and use:
-          #   xcrun notarytool submit "$DMG" \
-          #     --key-id "$APPLE_API_KEY_ID" \
-          #     --key "$APPLE_API_KEY" \
-          #     --issuer "$APPLE_API_ISSUER" --wait
           xcrun notarytool store-credentials "inkwell-notary" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
-      - name: Notarize .dmg
-        run: |
-          DMG=$(find target/aarch64-apple-darwin/release -maxdepth 1 -name '*.dmg' | head -n1)
+          DMG=$(find release -maxdepth 1 -name '*.dmg' | head -n1)
           echo "DMG=$DMG" >> "$GITHUB_ENV"
           xcrun notarytool submit "$DMG" --keychain-profile "inkwell-notary" --wait
 
       # -----------------------------------------------------------------------
-      # Step 8: staple the notarization ticket (so Gatekeeper works offline).
+      # Staple the notarization ticket
       # -----------------------------------------------------------------------
       - name: Staple notarization ticket
         run: xcrun stapler staple "$DMG"
 
-      # -----------------------------------------------------------------------
-      # Optional convenience artifact: a zipped .app alongside the .dmg.
-      # -----------------------------------------------------------------------
-      - name: Zip the .app
+      - name: Locate zipped .app
         run: |
-          APP_ZIP="$RUNNER_TEMP/Inkwell.app.zip"
-          ditto -c -k --keepParent target/aarch64-apple-darwin/release/Inkwell.app "$APP_ZIP"
-          echo "APP_ZIP=$APP_ZIP" >> "$GITHUB_ENV"
+          ZIP=$(find release -maxdepth 1 -name '*.zip' | head -n1)
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
-      # Step 9: attach the stapled .dmg (+ zipped .app) to a DRAFT release.
-      # The release is only created if every prior step (sign + notarize +
-      # staple) succeeded, so a failed/notarized build is never published.
+      # Attach the stapled .dmg (+ zipped .app) to a DRAFT release.
       # -----------------------------------------------------------------------
       - name: Create draft release
         env:
@@ -223,4 +167,4 @@ jobs:
             --title="$tag" \
             --draft \
             --notes="Automated macOS build — Developer ID signed, notarized, and stapled." \
-            "$DMG" "$APP_ZIP"
+            "$DMG" "$ZIP"

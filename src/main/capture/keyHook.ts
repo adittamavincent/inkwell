@@ -1,0 +1,147 @@
+import { uIOhook, UiohookKey, UiohookKeyboardEvent } from 'uiohook-napi';
+import { BrowserWindow } from 'electron';
+import { mapKeyEventToToken, ModifierState } from './keyMapper';
+import { getFrontmostAppName } from './activeApp';
+import { getConfig } from '../config/store';
+import { insertKeystroke } from '../db/repository';
+
+interface QueuedKeystroke {
+  timestamp: string;
+  appName: string;
+  keyChar: string;
+  keyCode: number;
+}
+
+let isRunning = false;
+const queue: QueuedKeystroke[] = [];
+let isProcessingQueue = false;
+
+const modifiers: ModifierState = {
+  shift: false,
+  ctrl: false,
+  alt: false,
+  meta: false,
+};
+
+function updateModifiers(keycode: number, isDown: boolean): void {
+  if (keycode === UiohookKey.Shift || keycode === UiohookKey.ShiftRight) {
+    modifiers.shift = isDown;
+  } else if (keycode === UiohookKey.Ctrl || keycode === UiohookKey.CtrlRight) {
+    modifiers.ctrl = isDown;
+  } else if (keycode === UiohookKey.Alt || keycode === UiohookKey.AltRight) {
+    modifiers.alt = isDown;
+  } else if (keycode === UiohookKey.Meta || keycode === UiohookKey.MetaRight) {
+    modifiers.meta = isDown;
+  }
+}
+
+function isAppExcluded(appName: string, excludedList: string[]): boolean {
+  const normalized = (appName || '').trim().toLowerCase();
+  if (!normalized) return false;
+
+  for (const excluded of excludedList) {
+    const cleanExcluded = (excluded || '').trim().toLowerCase();
+    if (cleanExcluded && normalized.includes(cleanExcluded)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function processQueue(): Promise<void> {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+
+  try {
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (!item) continue;
+
+      // 1. Write to SQLite
+      try {
+        insertKeystroke(item.timestamp, item.appName, item.keyChar, item.keyCode);
+      } catch (err) {
+        console.error('Inkwell: Failed to persist keystroke:', err);
+      }
+
+      // 2. Broadcast to UI windows
+      const allWindows = BrowserWindow.getAllWindows();
+      for (const win of allWindows) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('inkwell:keystroke', {
+            timestamp: item.timestamp,
+            appName: item.appName,
+            keyChar: item.keyChar,
+          });
+        }
+      }
+    }
+  } finally {
+    isProcessingQueue = false;
+  }
+}
+
+function handleKeyDown(e: UiohookKeyboardEvent): void {
+  updateModifiers(e.keycode, true);
+
+  const token = mapKeyEventToToken(e, modifiers);
+  if (!token) return;
+
+  const appName = getFrontmostAppName();
+  const config = getConfig();
+
+  if (isAppExcluded(appName, config.excludedApps)) {
+    return;
+  }
+
+  // Fast push to memory queue (< 0.1ms)
+  queue.push({
+    timestamp: new Date().toISOString(),
+    appName,
+    keyChar: token,
+    keyCode: e.keycode,
+  });
+
+  // Schedule async queue processor without blocking hook callback
+  setImmediate(() => {
+    processQueue();
+  });
+}
+
+function handleKeyUp(e: UiohookKeyboardEvent): void {
+  updateModifiers(e.keycode, false);
+}
+
+export function startCapture(): boolean {
+  if (isRunning) return true;
+
+  try {
+    uIOhook.on('keydown', handleKeyDown);
+    uIOhook.on('keyup', handleKeyUp);
+    uIOhook.start();
+    isRunning = true;
+    return true;
+  } catch (err) {
+    console.error('Inkwell: Failed to start uiohook key capture:', err);
+    return false;
+  }
+}
+
+export function stopCapture(): boolean {
+  if (!isRunning) return true;
+
+  try {
+    uIOhook.stop();
+    uIOhook.removeListener('keydown', handleKeyDown);
+    uIOhook.removeListener('keyup', handleKeyUp);
+    isRunning = false;
+    return true;
+  } catch (err) {
+    console.error('Inkwell: Failed to stop uiohook key capture:', err);
+    return false;
+  }
+}
+
+export function isCaptureRunning(): boolean {
+  return isRunning;
+}
