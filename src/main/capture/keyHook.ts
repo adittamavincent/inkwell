@@ -1,6 +1,5 @@
-import { uIOhook, UiohookKey, UiohookKeyboardEvent } from 'uiohook-napi';
 import { BrowserWindow } from 'electron';
-import { mapKeyEventToToken, ModifierState } from './keyMapper';
+import { mapKeyEventToToken, ModifierState, UiohookKeyboardEventLike, KEY } from './keyMapper';
 import { getFrontmostAppName } from './activeApp';
 import { checkAccessibilityPermission } from './permissions';
 import { getConfig } from '../config/store';
@@ -21,6 +20,27 @@ let lastEventReceivedAt = 0;
 let healthCheckTimer: NodeJS.Timeout | null = null;
 const queue: QueuedKeystroke[] = [];
 let isProcessingQueue = false;
+
+// Lazily loaded uiohook handle — only populated after permission granted
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let hook: any = null;
+
+function getHook(): any {
+  if (!hook) {
+    // Dynamic require defers native addon initialization until after
+    // accessibility permission is confirmed. Static imports cause macOS
+    // to show the Accessibility dialog immediately at app startup.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    hook = require('uiohook-napi').uIOhook;
+  }
+  return hook;
+}
+
+/** Test-only: inject a mock hook instead of loading the native addon. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function _setHookForTesting(mockHook: any): void {
+  hook = mockHook;
+}
 
 const modifiers: ModifierState = {
   shift: false,
@@ -46,13 +66,13 @@ function setCaptureHealth(health: CaptureHealth): void {
 }
 
 function updateModifiers(keycode: number, isDown: boolean): void {
-  if (keycode === UiohookKey.Shift || keycode === UiohookKey.ShiftRight) {
+  if (keycode === KEY.Shift || keycode === KEY.ShiftRight) {
     modifiers.shift = isDown;
-  } else if (keycode === UiohookKey.Ctrl || keycode === UiohookKey.CtrlRight) {
+  } else if (keycode === KEY.Ctrl || keycode === KEY.CtrlRight) {
     modifiers.ctrl = isDown;
-  } else if (keycode === UiohookKey.Alt || keycode === UiohookKey.AltRight) {
+  } else if (keycode === KEY.Alt || keycode === KEY.AltRight) {
     modifiers.alt = isDown;
-  } else if (keycode === UiohookKey.Meta || keycode === UiohookKey.MetaRight) {
+  } else if (keycode === KEY.Meta || keycode === KEY.MetaRight) {
     modifiers.meta = isDown;
   }
 }
@@ -108,7 +128,7 @@ async function processQueue(): Promise<void> {
   }
 }
 
-function handleKeyDown(e: UiohookKeyboardEvent): void {
+function handleKeyDown(e: UiohookKeyboardEventLike): void {
   lastEventReceivedAt = Date.now();
   if (captureHealth !== 'confirmed') {
     setCaptureHealth('confirmed');
@@ -140,7 +160,7 @@ function handleKeyDown(e: UiohookKeyboardEvent): void {
   });
 }
 
-function handleKeyUp(e: UiohookKeyboardEvent): void {
+function handleKeyUp(e: UiohookKeyboardEventLike): void {
   lastEventReceivedAt = Date.now();
   if (captureHealth !== 'confirmed') {
     setCaptureHealth('confirmed');
@@ -161,6 +181,7 @@ export function startCapture(): boolean {
   }
 
   try {
+    const uIOhook = getHook();
     uIOhook.removeAllListeners('keydown');
     uIOhook.removeAllListeners('keyup');
     uIOhook.on('keydown', handleKeyDown);
@@ -199,10 +220,12 @@ export function stopCapture(): boolean {
   }
 
   try {
-    uIOhook.removeAllListeners('keydown');
-    uIOhook.removeAllListeners('keyup');
-    if (isRunning) {
-      uIOhook.stop();
+    if (hook) {
+      hook.removeAllListeners('keydown');
+      hook.removeAllListeners('keyup');
+      if (isRunning) {
+        hook.stop();
+      }
     }
   } catch (err) {
     console.error('Inkwell: Failed to stop uiohook key capture:', err);
