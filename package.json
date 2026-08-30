@@ -7,9 +7,9 @@
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder --mac dmg zip --arm64",
+    "build": "PYTHON=/usr/bin/python3 tsc && vite build && electron-builder --mac dmg zip --arm64",
     "build:renderer": "tsc && vite build",
-    "pack": "tsc && vite build && electron-builder --dir",
+    "pack": "PYTHON=/usr/bin/python3 tsc && vite build && electron-builder --dir",
     "reset-permissions": "tccutil reset Accessibility com.inkwell.app && tccutil reset ListenEvent com.inkwell.app",
     "reset-permissions:dev": "tccutil reset Accessibility com.github.Electron && tccutil reset ListenEvent com.github.Electron",
     "test": "vitest run",
