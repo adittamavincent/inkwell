@@ -17,3 +17,11 @@ export function openAccessibilitySettings(): void {
     'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
   );
 }
+
+export function openInputMonitoringSettings(): void {
+  if (process.platform !== 'darwin') return;
+  // Open macOS Privacy & Security -> Input Monitoring
+  shell.openExternal(
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent'
+  );
+}

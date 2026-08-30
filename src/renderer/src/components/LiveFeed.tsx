@@ -4,11 +4,19 @@ import { Activity, Sparkles } from 'lucide-react';
 interface LiveFeedProps {
   app: string;
   text: string;
-  tokenCount: number;
+  keystrokeCount?: number;
+  tokenCount?: number;
 }
 
-export const LiveFeed: React.FC<LiveFeedProps> = ({ app, text, tokenCount }) => {
-  if (!text && !tokenCount) {
+export const LiveFeed: React.FC<LiveFeedProps> = ({
+  app,
+  text,
+  keystrokeCount,
+  tokenCount,
+}) => {
+  const count = keystrokeCount ?? tokenCount ?? 0;
+
+  if (!text && !count) {
     return (
       <div className="p-4 bg-ink-sidebar/50 border-b border-ink-border flex items-center justify-between text-xs text-ink-muted">
         <div className="flex items-center gap-2">
@@ -36,7 +44,9 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ app, text, tokenCount }) => 
         </div>
         <div className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Sparkles className="w-3.5 h-3.5 text-ink-accent" />
-          <span>{tokenCount} tokens</span>
+          <span>
+            {count} {count === 1 ? 'keystroke' : 'keystrokes'}
+          </span>
         </div>
       </div>
 

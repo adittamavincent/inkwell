@@ -5,6 +5,7 @@ import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { checkAccessibilityPermission } from './capture/permissions';
 import { startCapture, stopCapture } from './capture/keyHook';
+import { startActiveAppTracker, stopActiveAppTracker } from './capture/activeApp';
 import {
   startPermissionWatcher,
   stopPermissionWatcher,
@@ -76,17 +77,20 @@ app.whenReady().then(() => {
   loadConfig();
   getDatabase();
 
-  // 2. Register IPC bridge
+  // 2. Start frontmost app tracker
+  startActiveAppTracker();
+
+  // 3. Register IPC bridge
   registerIpcHandlers(() => mainWindow);
 
-  // 3. Create window & Tray
+  // 4. Create window & Tray
   createWindow();
   setupTray(mainWindow);
 
-  // 4. Check macOS Input Monitoring / Accessibility permissions (non-prompting on start)
+  // 5. Check macOS Input Monitoring / Accessibility permissions (non-prompting on start)
   const hasPerm = checkAccessibilityPermission(false);
   if (hasPerm) {
-    // 5. Start global key listener immediately for returning granted users
+    // 6. Start global key listener immediately for returning granted users
     startCapture();
   } else {
     console.warn(
@@ -113,6 +117,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  stopActiveAppTracker();
   stopPermissionWatcher();
   stopCapture();
 });

@@ -7,9 +7,10 @@
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder --mac dmg zip --arm64 -c.mac.identity=null",
+    "build": "tsc && vite build && electron-builder --mac dmg zip --arm64",
     "build:renderer": "tsc && vite build",
-    "pack": "tsc && vite build && electron-builder --dir -c.mac.identity=null",
+    "pack": "tsc && vite build && electron-builder --dir",
+    "reset-permissions": "tccutil reset Accessibility com.inkwell.app && tccutil reset ListenEvent com.inkwell.app",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

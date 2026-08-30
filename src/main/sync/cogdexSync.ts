@@ -83,7 +83,7 @@ export function doSync(config: CogdexSyncConfig): { success: boolean; message: s
     };
   }
 
-  const sessions = groupSessions(rows, config.idleTimeoutSecs);
+  const sessions = groupSessions(rows, config.idleTimeoutSecs, config.appSwitchGraceSecs);
   if (sessions.length === 0) {
     return {
       success: true,

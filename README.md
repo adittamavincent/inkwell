@@ -61,7 +61,33 @@ pnpm run build
 pnpm run pack
 ```
 
-The GitHub Actions workflow (`.github/workflows/release.yml`) codesigns with Developer ID, verifies non-ad-hoc signing, notarizes with `xcrun notarytool`, staples tickets, and creates a draft GitHub Release on tag push.
+### Local Dev Signing Setup
+
+To prevent macOS from revoking Accessibility and Input Monitoring permissions on every local rebuild, Inkwell is signed with a stable local code-signing certificate named `Inkwell Dev`.
+
+#### One-Time Setup:
+1. Open **Keychain Access** on macOS.
+2. In the menu bar, navigate to **Keychain Access → Certificate Assistant → Create a Certificate...**
+3. Configure the certificate:
+   - **Name**: `Inkwell Dev`
+   - **Identity Type**: `Self Signed Root`
+   - **Certificate Type**: `Code Signing`
+4. Click **Create**, then **Continue**.
+
+Permissions granted in macOS System Settings will now persist across `pnpm run build` and reinstall cycles.
+
+> **Note**: CI/release builds (`.github/workflows/release.yml`) use Apple Developer ID certificates via the `CSC_NAME` secret, which takes precedence over local signing in CI environments.
+
+#### Permission Reset (Clean Slate):
+To completely reset granted TCC permissions for testing:
+```bash
+pnpm run reset-permissions
+```
+Or manually:
+```bash
+tccutil reset Accessibility com.inkwell.app
+tccutil reset ListenEvent com.inkwell.app
+```
 
 ---
 

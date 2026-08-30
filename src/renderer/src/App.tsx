@@ -5,15 +5,29 @@ import { SessionHistory } from './components/SessionHistory';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { PermissionBanner } from './components/PermissionBanner';
 import { PermissionGate } from './components/PermissionGate';
-import { SessionPreview, KeystrokePayload, SyncResponse } from './types';
+import {
+  SessionPreview,
+  KeystrokePayload,
+  SyncResponse,
+  CaptureHealth,
+} from './types';
 import { reconstructText } from '../../shared/reconstructor';
 import { DEFAULT_CONFIG, CogdexSyncConfig } from '../../shared/constants';
 
+interface SuspendedSession {
+  tokens: string[];
+  app: string;
+  start: string;
+  suspendedAt: number;
+}
+
 export const App: React.FC = () => {
   const [isRunning, setIsRunning] = useState(true);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [hasAccessibility, setHasAccessibility] = useState<boolean | null>(null);
+  const [captureHealth, setCaptureHealth] = useState<CaptureHealth>('unconfirmed');
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
   const [isSuccessGate, setIsSuccessGate] = useState(false);
+  const [detectedApp, setDetectedApp] = useState<string>('');
   const [config, setConfig] = useState<CogdexSyncConfig>(DEFAULT_CONFIG);
   const [history, setHistory] = useState<SessionPreview[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -31,9 +45,24 @@ export const App: React.FC = () => {
   const liveTokensRef = useRef<string[]>([]);
   const liveAppRef = useRef<string>('');
   const liveStartRef = useRef<string | null>(null);
+  const suspendedSessionRef = useRef<SuspendedSession | null>(null);
   const lastKeyTimeRef = useRef<number>(0);
 
   const flushLiveSession = useCallback(() => {
+    // Flush any suspended session first
+    if (suspendedSessionRef.current) {
+      const reconstructed = reconstructText(suspendedSessionRef.current.tokens);
+      if (reconstructed.trim()) {
+        const newSession: SessionPreview = {
+          start: suspendedSessionRef.current.start,
+          app: suspendedSessionRef.current.app,
+          text: reconstructed,
+        };
+        setHistory((prev) => [newSession, ...prev]);
+      }
+      suspendedSessionRef.current = null;
+    }
+
     if (liveTokensRef.current.length > 0) {
       const reconstructed = reconstructText(liveTokensRef.current);
       if (reconstructed.trim()) {
@@ -42,7 +71,7 @@ export const App: React.FC = () => {
           app: liveAppRef.current || 'Unknown',
           text: reconstructed,
         };
-        setHistory((prev) => [...prev, newSession]);
+        setHistory((prev) => [newSession, ...prev]);
       }
       liveTokensRef.current = [];
       liveAppRef.current = '';
@@ -61,26 +90,64 @@ export const App: React.FC = () => {
     window.inkwellApi.getConfig().then(setConfig);
     window.inkwellApi.getHistory().then(setHistory);
 
+    // Initial frontmost app & capture health
+    window.inkwellApi.getActiveApp?.().then(setDetectedApp);
+    window.inkwellApi.getCaptureHealth?.().then(setCaptureHealth);
+
     // Initial non-prompting permission check
     window.inkwellApi.checkPermissions(false).then((granted) => {
-      setHasPermission(granted);
-      setIsOnboarded(granted);
+      setHasAccessibility(granted);
       if (granted) {
         window.inkwellApi?.getCaptureStatus().then(setIsRunning);
+        window.inkwellApi?.getCaptureHealth?.().then((health) => {
+          setCaptureHealth(health);
+          if (health === 'confirmed') {
+            setIsOnboarded(true);
+          } else {
+            // Keep gate or allow entering once verified
+            setIsOnboarded(true);
+          }
+        });
+      } else {
+        setIsOnboarded(false);
       }
     });
+
+    // Active App Changed Listener
+    const unsubscribeActiveApp = window.inkwellApi.onActiveAppChanged?.((appName: string) => {
+      setDetectedApp(appName);
+    });
+
+    // Capture Health Changed Listener
+    const unsubscribeHealth = window.inkwellApi.onCaptureHealthChanged?.(
+      (health: CaptureHealth) => {
+        setCaptureHealth(health);
+      }
+    );
 
     // Keystroke Stream Listener
     const unsubscribeKeystroke = window.inkwellApi.onKeystroke((payload: KeystrokePayload) => {
       const now = Date.now();
       const idleLimitMs = (configRef.current.idleTimeoutSecs || 60) * 1000;
-      const appChanged =
-        Boolean(liveAppRef.current) && liveAppRef.current !== payload.appName;
+      const graceLimitMs = (configRef.current.appSwitchGraceSecs || 10) * 1000;
       const timedOut =
         lastKeyTimeRef.current > 0 && now - lastKeyTimeRef.current > idleLimitMs;
 
-      if (appChanged || timedOut) {
-        // 1. Flush previous live session into history
+      if (timedOut) {
+        // Idle gap splits unconditionally
+        if (suspendedSessionRef.current) {
+          const reconstructed = reconstructText(suspendedSessionRef.current.tokens);
+          if (reconstructed.trim()) {
+            const finishedSuspended: SessionPreview = {
+              start: suspendedSessionRef.current.start,
+              app: suspendedSessionRef.current.app,
+              text: reconstructed,
+            };
+            setHistory((prev) => [finishedSuspended, ...prev]);
+          }
+          suspendedSessionRef.current = null;
+        }
+
         if (liveTokensRef.current.length > 0) {
           const reconstructed = reconstructText(liveTokensRef.current);
           if (reconstructed.trim()) {
@@ -89,18 +156,57 @@ export const App: React.FC = () => {
               app: liveAppRef.current || 'Unknown',
               text: reconstructed,
             };
-            setHistory((prev) => [...prev, finishedSession]);
+            setHistory((prev) => [finishedSession, ...prev]);
           }
         }
-        // 2. Start fresh session synchronously in refs
+
         liveTokensRef.current = [payload.keyChar];
         liveAppRef.current = payload.appName;
         liveStartRef.current = payload.timestamp;
-      } else {
-        // Append to current session synchronously in refs
+      } else if (liveAppRef.current && liveAppRef.current === payload.appName) {
+        // Continuation in same app
         liveTokensRef.current.push(payload.keyChar);
-        if (!liveAppRef.current) liveAppRef.current = payload.appName;
-        if (!liveStartRef.current) liveStartRef.current = payload.timestamp;
+      } else if (
+        suspendedSessionRef.current &&
+        suspendedSessionRef.current.app === payload.appName &&
+        now - suspendedSessionRef.current.suspendedAt <= graceLimitMs &&
+        liveTokensRef.current.length <= 2
+      ) {
+        // Quick return to suspended app within grace window with <= 2 stray keys in other app.
+        // Discard stray interstitial tokens and merge into original session!
+        liveTokensRef.current = [...suspendedSessionRef.current.tokens, payload.keyChar];
+        liveAppRef.current = suspendedSessionRef.current.app;
+        liveStartRef.current = suspendedSessionRef.current.start;
+        suspendedSessionRef.current = null;
+      } else {
+        // App changed or grace window exceeded or real typing in other app
+        if (suspendedSessionRef.current) {
+          const reconstructed = reconstructText(suspendedSessionRef.current.tokens);
+          if (reconstructed.trim()) {
+            const finishedSuspended: SessionPreview = {
+              start: suspendedSessionRef.current.start,
+              app: suspendedSessionRef.current.app,
+              text: reconstructed,
+            };
+            setHistory((prev) => [finishedSuspended, ...prev]);
+          }
+          suspendedSessionRef.current = null;
+        }
+
+        if (liveTokensRef.current.length > 0) {
+          // Suspend current session
+          suspendedSessionRef.current = {
+            tokens: [...liveTokensRef.current],
+            app: liveAppRef.current,
+            start: liveStartRef.current || new Date().toISOString(),
+            suspendedAt: lastKeyTimeRef.current || now,
+          };
+        }
+
+        // Start interstitial/new session
+        liveTokensRef.current = [payload.keyChar];
+        liveAppRef.current = payload.appName;
+        liveStartRef.current = payload.timestamp;
       }
 
       lastKeyTimeRef.current = now;
@@ -115,16 +221,13 @@ export const App: React.FC = () => {
 
     // Main Process Permission Watcher Event Listener
     const unsubscribePermission = window.inkwellApi.onPermissionGranted?.(() => {
-      setIsSuccessGate(true);
-      setTimeout(() => {
-        setHasPermission(true);
-        setIsOnboarded(true);
-        setIsSuccessGate(false);
-        window.inkwellApi?.getCaptureStatus().then(setIsRunning);
-      }, 600);
+      setHasAccessibility(true);
+      window.inkwellApi?.getCaptureStatus().then(setIsRunning);
     });
 
     return () => {
+      unsubscribeActiveApp?.();
+      unsubscribeHealth?.();
       unsubscribeKeystroke();
       unsubscribePermission?.();
     };
@@ -136,9 +239,10 @@ export const App: React.FC = () => {
       const api = window.inkwellApi;
       if (api) {
         api.checkPermissions(false).then((granted) => {
-          setHasPermission(granted);
+          setHasAccessibility(granted);
           if (granted) {
             api.getCaptureStatus().then(setIsRunning);
+            api.getCaptureHealth?.().then(setCaptureHealth);
             if (isOnboarded === false) {
               setIsOnboarded(true);
             }
@@ -166,6 +270,7 @@ export const App: React.FC = () => {
     liveTokensRef.current = [];
     liveAppRef.current = '';
     liveStartRef.current = null;
+    suspendedSessionRef.current = null;
     lastKeyTimeRef.current = 0;
     setHistory([]);
     setLiveTokens([]);
@@ -182,13 +287,20 @@ export const App: React.FC = () => {
   const handleCopyAll = async () => {
     if (!window.inkwellApi) return;
     let fullPreview = '';
-    for (const s of history) {
-      const timeStr = new Date(s.start).toLocaleTimeString();
-      fullPreview += `${timeStr} · ${s.app}\n${s.text}\n\n`;
-    }
     if (liveText.trim()) {
       const timeStr = liveStart ? new Date(liveStart).toLocaleTimeString() : '';
       fullPreview += `${timeStr} · ${liveApp || 'Live'}\n${liveText}\n\n`;
+    }
+    if (suspendedSessionRef.current) {
+      const recon = reconstructText(suspendedSessionRef.current.tokens);
+      if (recon.trim()) {
+        const timeStr = new Date(suspendedSessionRef.current.start).toLocaleTimeString();
+        fullPreview += `${timeStr} · ${suspendedSessionRef.current.app}\n${recon}\n\n`;
+      }
+    }
+    for (const s of history) {
+      const timeStr = new Date(s.start).toLocaleTimeString();
+      fullPreview += `${timeStr} · ${s.app}\n${s.text}\n\n`;
     }
 
     await window.inkwellApi.copyToClipboard(fullPreview.trim());
@@ -210,20 +322,24 @@ export const App: React.FC = () => {
     return window.inkwellApi.forceSync();
   };
 
-  const handleRequestPermission = async (): Promise<boolean> => {
+  const handleRequestAccessibility = async (): Promise<boolean> => {
     if (!window.inkwellApi) return false;
     const granted = await window.inkwellApi.checkPermissions(true);
-    setHasPermission(granted);
+    setHasAccessibility(granted);
     if (granted) {
-      setIsOnboarded(true);
       window.inkwellApi.getCaptureStatus().then(setIsRunning);
     }
     return granted;
   };
 
-  const handleOpenSettings = async () => {
-    if (!window.inkwellApi?.openSystemSettings) return;
-    await window.inkwellApi.openSystemSettings();
+  const handleOpenAccessibilitySettings = async () => {
+    if (!window.inkwellApi?.openAccessibilitySettings) return;
+    await window.inkwellApi.openAccessibilitySettings();
+  };
+
+  const handleOpenInputMonitoringSettings = async () => {
+    if (!window.inkwellApi?.openInputMonitoringSettings) return;
+    await window.inkwellApi.openInputMonitoringSettings();
   };
 
   // Loading state before initial check resolves (prevents flash of gate)
@@ -236,43 +352,54 @@ export const App: React.FC = () => {
     return (
       <PermissionGate
         onGranted={() => {
-          setHasPermission(true);
+          setHasAccessibility(true);
           setIsOnboarded(true);
           window.inkwellApi?.getCaptureStatus().then(setIsRunning);
         }}
-        onRequestPermission={handleRequestPermission}
-        onOpenSettings={handleOpenSettings}
+        hasAccessibility={hasAccessibility ?? false}
+        captureHealth={captureHealth}
+        onRequestAccessibility={handleRequestAccessibility}
+        onOpenAccessibilitySettings={handleOpenAccessibilitySettings}
+        onOpenInputMonitoringSettings={handleOpenInputMonitoringSettings}
         isGranted={isSuccessGate}
       />
     );
   }
+
+  const effectiveSessionCount =
+    history.length +
+    (liveText ? 1 : 0) +
+    (suspendedSessionRef.current && reconstructText(suspendedSessionRef.current.tokens).trim() ? 1 : 0);
 
   // 2. Normal Main Application UI
   return (
     <div className="flex flex-col h-screen w-screen bg-ink-bg text-ink-text overflow-hidden">
       <Header
         isRunning={isRunning}
+        detectedApp={detectedApp}
         onToggleCapture={handleToggleCapture}
         onClear={handleClearHistory}
         onCopyAll={handleCopyAll}
         isCopied={isCopied}
         isSettingsOpen={isSettingsOpen}
         onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
-        sessionCount={history.length + (liveText ? 1 : 0)}
+        sessionCount={effectiveSessionCount}
       />
 
-      {/* Safety Net Banner for in-session permission revocation */}
+      {/* Safety Net Banner for in-session permission revocation / missing Input Monitoring */}
       <PermissionBanner
-        hasPermission={hasPermission ?? true}
-        onRequestPermission={handleRequestPermission}
-        onOpenSettings={handleOpenSettings}
+        hasAccessibility={hasAccessibility ?? true}
+        captureHealth={captureHealth}
+        onRequestAccessibility={handleRequestAccessibility}
+        onOpenAccessibilitySettings={handleOpenAccessibilitySettings}
+        onOpenInputMonitoringSettings={handleOpenInputMonitoringSettings}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <LiveFeed
           app={liveApp}
           text={liveText}
-          tokenCount={liveTokens.length}
+          keystrokeCount={liveTokens.length}
         />
 
         <SessionHistory

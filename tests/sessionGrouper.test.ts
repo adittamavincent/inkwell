@@ -12,7 +12,7 @@ describe('groupSessions', () => {
       ['2026-08-30T10:00:40Z', 'Notes', 'o'],
     ] as [string, string, string][];
 
-    const sessions = groupSessions(rows, 60);
+    const sessions = groupSessions(rows, 60, 10);
     expect(sessions).toHaveLength(1);
     expect(sessions[0].app).toBe('Notes');
     expect(sessions[0].text).toBe('hello');
@@ -27,13 +27,80 @@ describe('groupSessions', () => {
       ['2026-08-30T10:01:25Z', 'Code', 'd'],
     ] as [string, string, string][];
 
-    const sessions = groupSessions(rows, 60);
+    const sessions = groupSessions(rows, 60, 10);
     expect(sessions).toHaveLength(2);
     expect(sessions[0].text).toBe('ab');
     expect(sessions[1].text).toBe('cd');
   });
 
-  it('splits into a new session immediately when frontmost app changes, even with no time gap', () => {
+  it('merges a quick round-trip back to App A with a stray keystroke in App B within grace window into ONE session', () => {
+    const rows = [
+      ['2026-08-30T10:00:00Z', 'VSCode', 'h'],
+      ['2026-08-30T10:00:01Z', 'VSCode', 'e'],
+      ['2026-08-30T10:00:02Z', 'VSCode', 'l'],
+      // Accidental single keystroke in Slack 1s later
+      ['2026-08-30T10:00:03Z', 'Slack', 'k'],
+      // Back to VSCode within grace window (2s elapsed)
+      ['2026-08-30T10:00:05Z', 'VSCode', 'l'],
+      ['2026-08-30T10:00:06Z', 'VSCode', 'o'],
+    ] as [string, string, string][];
+
+    const sessions = groupSessions(rows, 60, 10);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].app).toBe('VSCode');
+    expect(sessions[0].text).toBe('hello');
+  });
+
+  it('splits into separate sessions when round-trip to App B exceeds appSwitchGraceSecs', () => {
+    const rows = [
+      ['2026-08-30T10:00:00Z', 'VSCode', 'h'],
+      ['2026-08-30T10:00:01Z', 'VSCode', 'i'],
+      // Switched to Slack and stray key
+      ['2026-08-30T10:00:02Z', 'Slack', 'x'],
+      // Returns to VSCode 15s later (> grace window of 10s)
+      ['2026-08-30T10:00:17Z', 'VSCode', 'a'],
+      ['2026-08-30T10:00:18Z', 'VSCode', 'g'],
+      ['2026-08-30T10:00:19Z', 'VSCode', 'a'],
+      ['2026-08-30T10:00:20Z', 'VSCode', 'i'],
+      ['2026-08-30T10:00:21Z', 'VSCode', 'n'],
+    ] as [string, string, string][];
+
+    const sessions = groupSessions(rows, 60, 10);
+    expect(sessions).toHaveLength(3);
+    expect(sessions[0].app).toBe('VSCode');
+    expect(sessions[0].text).toBe('hi');
+    expect(sessions[1].app).toBe('Slack');
+    expect(sessions[1].text).toBe('x');
+    expect(sessions[2].app).toBe('VSCode');
+    expect(sessions[2].text).toBe('again');
+  });
+
+  it('splits into separate sessions when real typing (> 2 keys) occurs in App B before returning', () => {
+    const rows = [
+      ['2026-08-30T10:00:00Z', 'VSCode', 'h'],
+      ['2026-08-30T10:00:01Z', 'VSCode', 'i'],
+      // Real typing in Slack (4 keys)
+      ['2026-08-30T10:00:02Z', 'Slack', 's'],
+      ['2026-08-30T10:00:03Z', 'Slack', 'u'],
+      ['2026-08-30T10:00:04Z', 'Slack', 'r'],
+      ['2026-08-30T10:00:05Z', 'Slack', 'e'],
+      // Returns to VSCode within grace window
+      ['2026-08-30T10:00:07Z', 'VSCode', 'b'],
+      ['2026-08-30T10:00:08Z', 'VSCode', 'y'],
+      ['2026-08-30T10:00:09Z', 'VSCode', 'e'],
+    ] as [string, string, string][];
+
+    const sessions = groupSessions(rows, 60, 10);
+    expect(sessions).toHaveLength(3);
+    expect(sessions[0].app).toBe('VSCode');
+    expect(sessions[0].text).toBe('hi');
+    expect(sessions[1].app).toBe('Slack');
+    expect(sessions[1].text).toBe('sure');
+    expect(sessions[2].app).toBe('VSCode');
+    expect(sessions[2].text).toBe('bye');
+  });
+
+  it('splits into separate sessions when switching permanently to another app', () => {
     const rows = [
       ['2026-08-30T10:00:00Z', 'Slack', 'h'],
       ['2026-08-30T10:00:01Z', 'Slack', 'i'],
@@ -41,7 +108,7 @@ describe('groupSessions', () => {
       ['2026-08-30T10:00:03Z', 'Chrome', 'o'],
     ] as [string, string, string][];
 
-    const sessions = groupSessions(rows, 60);
+    const sessions = groupSessions(rows, 60, 10);
     expect(sessions).toHaveLength(2);
     expect(sessions[0].app).toBe('Slack');
     expect(sessions[0].text).toBe('hi');
@@ -64,7 +131,7 @@ describe('groupSessions', () => {
       ['2026-08-30T10:00:10Z', 'Obsidian', 'p'],
     ] as [string, string, string][];
 
-    const sessions = groupSessions(rows, 60);
+    const sessions = groupSessions(rows, 60, 10);
     expect(sessions).toHaveLength(1);
     expect(sessions[0].text).toBe('Inkwell app');
   });

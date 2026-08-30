@@ -54,6 +54,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
       ...form,
       excludedApps: apps,
       idleTimeoutSecs: Number(form.idleTimeoutSecs) || 60,
+      appSwitchGraceSecs: Number(form.appSwitchGraceSecs) || 10,
     });
 
     setIsSaving(false);
@@ -168,22 +169,40 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
           </div>
         </div>
 
-        {/* Idle Timeout */}
-        <div>
-          <label className="block font-medium text-ink-text mb-1 flex items-center gap-1">
-            <Clock className="w-3 h-3 text-ink-muted" />
-            <span>Idle Timeout (Seconds)</span>
-          </label>
-          <input
-            type="number"
-            min="5"
-            max="3600"
-            value={form.idleTimeoutSecs}
-            onChange={(e) =>
-              setForm({ ...form, idleTimeoutSecs: parseInt(e.target.value, 10) || 60 })
-            }
-            className="w-full bg-ink-bg border border-ink-border rounded-md px-2.5 py-1.5 text-ink-text font-mono text-xs focus:outline-none focus:border-ink-accent"
-          />
+        {/* Idle Timeout & App Switch Grace Period */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block font-medium text-ink-text mb-1 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-ink-muted" />
+              <span>Idle Timeout (s)</span>
+            </label>
+            <input
+              type="number"
+              min="5"
+              max="3600"
+              value={form.idleTimeoutSecs}
+              onChange={(e) =>
+                setForm({ ...form, idleTimeoutSecs: parseInt(e.target.value, 10) || 60 })
+              }
+              className="w-full bg-ink-bg border border-ink-border rounded-md px-2.5 py-1.5 text-ink-text font-mono text-xs focus:outline-none focus:border-ink-accent"
+            />
+          </div>
+          <div>
+            <label className="block font-medium text-ink-text mb-1 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-ink-muted" />
+              <span>App Grace (s)</span>
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="300"
+              value={form.appSwitchGraceSecs}
+              onChange={(e) =>
+                setForm({ ...form, appSwitchGraceSecs: parseInt(e.target.value, 10) || 10 })
+              }
+              className="w-full bg-ink-bg border border-ink-border rounded-md px-2.5 py-1.5 text-ink-text font-mono text-xs focus:outline-none focus:border-ink-accent"
+            />
+          </div>
         </div>
 
         {/* Excluded Apps */}

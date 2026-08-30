@@ -7,10 +7,12 @@ import {
   SlidersHorizontal,
   Feather,
   Check,
+  AppWindow,
 } from 'lucide-react';
 
 interface HeaderProps {
   isRunning: boolean;
+  detectedApp?: string;
   onToggleCapture: () => void;
   onClear: () => void;
   onCopyAll: () => void;
@@ -22,6 +24,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   isRunning,
+  detectedApp,
   onToggleCapture,
   onClear,
   onCopyAll,
@@ -66,7 +69,20 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        <span className="text-xs text-ink-muted hidden sm:inline">
+        {/* Persistent Frontmost App Indicator Badge */}
+        {detectedApp && (
+          <div
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-ink-card border border-ink-border text-xs text-ink-muted"
+            title={`Current frontmost app: ${detectedApp}`}
+          >
+            <AppWindow className="w-3 h-3 text-ink-muted/80" />
+            <span className="text-ink-text font-medium truncate max-w-[120px] sm:max-w-[160px]">
+              {detectedApp}
+            </span>
+          </div>
+        )}
+
+        <span className="text-xs text-ink-muted hidden lg:inline">
           {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
         </span>
       </div>

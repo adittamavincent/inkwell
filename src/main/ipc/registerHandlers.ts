@@ -1,6 +1,17 @@
 import { ipcMain, clipboard, BrowserWindow } from 'electron';
-import { isCaptureRunning, startCapture, stopCapture, restartCapture } from '../capture/keyHook';
-import { checkAccessibilityPermission, openAccessibilitySettings } from '../capture/permissions';
+import {
+  isCaptureRunning,
+  startCapture,
+  stopCapture,
+  restartCapture,
+  getCaptureHealth,
+} from '../capture/keyHook';
+import {
+  checkAccessibilityPermission,
+  openAccessibilitySettings,
+  openInputMonitoringSettings,
+} from '../capture/permissions';
+import { getFrontmostAppName } from '../capture/activeApp';
 import {
   startPermissionWatcher,
   isPermissionWatcherRunning,
@@ -13,6 +24,14 @@ import { updateTrayMenu } from '../tray/trayManager';
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('inkwell:getCaptureStatus', () => {
     return isCaptureRunning();
+  });
+
+  ipcMain.handle('inkwell:getCaptureHealth', () => {
+    return getCaptureHealth();
+  });
+
+  ipcMain.handle('inkwell:getActiveApp', () => {
+    return getFrontmostAppName();
   });
 
   ipcMain.handle('inkwell:toggleCapture', (_event, start: boolean) => {
@@ -44,6 +63,32 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     return hasPerm;
   });
 
+  ipcMain.handle('inkwell:openAccessibilitySettings', () => {
+    openAccessibilitySettings();
+    if (!isPermissionWatcherRunning()) {
+      startPermissionWatcher(() => {
+        startCapture();
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('inkwell:permissionGranted');
+        }
+      });
+    }
+  });
+
+  ipcMain.handle('inkwell:openInputMonitoringSettings', () => {
+    openInputMonitoringSettings();
+    if (!isPermissionWatcherRunning()) {
+      startPermissionWatcher(() => {
+        startCapture();
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('inkwell:permissionGranted');
+        }
+      });
+    }
+  });
+
   ipcMain.handle('inkwell:openSystemSettings', () => {
     openAccessibilitySettings();
     if (!isPermissionWatcherRunning()) {
@@ -59,7 +104,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
 
   ipcMain.handle('inkwell:getHistory', () => {
     const config = getConfig();
-    return loadAllHistory(config.idleTimeoutSecs);
+    return loadAllHistory(config.idleTimeoutSecs, config.appSwitchGraceSecs);
   });
 
   ipcMain.handle('inkwell:clearHistory', () => {

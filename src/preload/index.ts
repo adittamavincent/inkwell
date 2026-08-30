@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { CogdexSyncConfig } from '../main/config/store';
 import type { SessionPreview } from '../main/sync/sessionGrouper';
+import type { CaptureHealth } from '../main/capture/keyHook';
+
+export type { CaptureHealth };
 
 export interface KeystrokePayload {
   timestamp: string;
@@ -23,9 +26,31 @@ export const api = {
     };
   },
 
-  // Capture Controls
+  // Active App Listener & Getter
+  onActiveAppChanged: (callback: (appName: string) => void) => {
+    const handler = (_event: any, appName: string) => callback(appName);
+    ipcRenderer.on('inkwell:activeAppChanged', handler);
+    return () => {
+      ipcRenderer.removeListener('inkwell:activeAppChanged', handler);
+    };
+  },
+  getActiveApp: (): Promise<string> => {
+    return ipcRenderer.invoke('inkwell:getActiveApp');
+  },
+
+  // Capture Controls & Health
   getCaptureStatus: (): Promise<boolean> => {
     return ipcRenderer.invoke('inkwell:getCaptureStatus');
+  },
+  getCaptureHealth: (): Promise<CaptureHealth> => {
+    return ipcRenderer.invoke('inkwell:getCaptureHealth');
+  },
+  onCaptureHealthChanged: (callback: (health: CaptureHealth) => void) => {
+    const handler = (_event: any, health: CaptureHealth) => callback(health);
+    ipcRenderer.on('inkwell:captureHealthChanged', handler);
+    return () => {
+      ipcRenderer.removeListener('inkwell:captureHealthChanged', handler);
+    };
   },
   toggleCapture: (start: boolean): Promise<boolean> => {
     return ipcRenderer.invoke('inkwell:toggleCapture', start);
@@ -34,6 +59,12 @@ export const api = {
   // Permissions
   checkPermissions: (prompt = false): Promise<boolean> => {
     return ipcRenderer.invoke('inkwell:checkPermissions', prompt);
+  },
+  openAccessibilitySettings: (): Promise<void> => {
+    return ipcRenderer.invoke('inkwell:openAccessibilitySettings');
+  },
+  openInputMonitoringSettings: (): Promise<void> => {
+    return ipcRenderer.invoke('inkwell:openInputMonitoringSettings');
   },
   openSystemSettings: (): Promise<void> => {
     return ipcRenderer.invoke('inkwell:openSystemSettings');

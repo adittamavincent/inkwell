@@ -34,7 +34,7 @@ export function querySessionsSince(sinceIso: string): Array<[string, string, str
   return rows.map((r) => [r.timestamp, r.app_name || 'Unknown', decrypt(r.key_char)]);
 }
 
-export function loadAllHistory(idleTimeoutSecs = 60): SessionPreview[] {
+export function loadAllHistory(idleTimeoutSecs = 60, appSwitchGraceSecs = 10): SessionPreview[] {
   const db = getDatabase();
   const stmt = db.prepare(`
     SELECT timestamp, app_name, key_char
@@ -53,7 +53,7 @@ export function loadAllHistory(idleTimeoutSecs = 60): SessionPreview[] {
     decrypt(r.key_char),
   ]);
 
-  return groupSessions(decryptedRows, idleTimeoutSecs);
+  return groupSessions(decryptedRows, idleTimeoutSecs, appSwitchGraceSecs).reverse();
 }
 
 export function clearHistory(): void {

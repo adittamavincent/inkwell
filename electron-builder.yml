@@ -10,8 +10,10 @@ files:
   - package.json
 mac:
   category: public.app-category.utilities
-  identity: null
-  hardenedRuntime: false
+  identity: "Inkwell Dev"
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   gatekeeperAssess: false
   target:
     - target: dmg

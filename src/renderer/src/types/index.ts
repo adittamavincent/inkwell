@@ -1,3 +1,5 @@
+export type CaptureHealth = 'unconfirmed' | 'confirmed' | 'stalled';
+
 export interface CogdexSyncConfig {
   enabled: boolean;
   vaultPath: string;
@@ -5,6 +7,7 @@ export interface CogdexSyncConfig {
   dayPattern: string;
   keylogSuffix: string;
   idleTimeoutSecs: number;
+  appSwitchGraceSecs: number;
   excludedApps: string[];
 }
 
