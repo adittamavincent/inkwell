@@ -1,17 +1,24 @@
 import { BrowserWindow } from 'electron';
-import { checkAccessibilityPermission } from './permissions';
+import {
+  checkAccessibilityStatus,
+  checkInputMonitoringStatus,
+  PermissionStatus,
+} from './permissions';
 import { startCapture, stopCapture, isCaptureRunning } from './keyHook';
 
 let activeInterval: NodeJS.Timeout | null = null;
-let lastKnownState: boolean | null = null;
-let statusChangeCallback: ((granted: boolean) => void) | null = null;
+let lastKnownStatus: PermissionStatus | null = null;
+let statusChangeCallback: ((status: PermissionStatus) => void) | null = null;
 
-function broadcastPermissionState(granted: boolean): void {
+function broadcastPermissionState(status: PermissionStatus): void {
+  const isFullyAuthorized =
+    status.accessibility === 'authorized' && status.inputMonitoring === 'authorized';
+
   const windows = BrowserWindow.getAllWindows();
   for (const win of windows) {
     if (!win.isDestroyed()) {
-      win.webContents.send('inkwell:permissionStatusChanged', granted);
-      if (granted) {
+      win.webContents.send('inkwell:permissionStatusChanged', status);
+      if (isFullyAuthorized) {
         win.webContents.send('inkwell:permissionGranted');
       } else {
         win.webContents.send('inkwell:permissionRevoked');
@@ -21,16 +28,20 @@ function broadcastPermissionState(granted: boolean): void {
 }
 
 /**
- * Checks current macOS accessibility permission and synchronizes capture state.
- * If permission was revoked/disabled, immediately stops capture to prevent event tap freeze.
- * If permission was granted, starts capture.
+ * Checks current macOS accessibility & input monitoring permissions and synchronizes capture state.
+ * Uses read-only native OS status queries without prompting dialogs.
  */
-export function checkAndSyncPermissionState(): boolean {
-  const isGranted = checkAccessibilityPermission(false);
+export function checkAndSyncPermissionState(): PermissionStatus {
+  const accessibility = checkAccessibilityStatus();
+  const inputMonitoring = checkInputMonitoringStatus();
+  const currentStatus: PermissionStatus = { accessibility, inputMonitoring };
 
-  if (lastKnownState === null) {
-    lastKnownState = isGranted;
-    if (isGranted) {
+  const isFullyAuthorized =
+    accessibility === 'authorized' && inputMonitoring === 'authorized';
+
+  if (lastKnownStatus === null) {
+    lastKnownStatus = currentStatus;
+    if (isFullyAuthorized) {
       if (!isCaptureRunning()) {
         startCapture();
       }
@@ -39,43 +50,47 @@ export function checkAndSyncPermissionState(): boolean {
         stopCapture();
       }
     }
-    return isGranted;
+    return currentStatus;
   }
 
-  if (lastKnownState !== isGranted) {
-    lastKnownState = isGranted;
+  const hasChanged =
+    lastKnownStatus.accessibility !== currentStatus.accessibility ||
+    lastKnownStatus.inputMonitoring !== currentStatus.inputMonitoring;
 
-    if (isGranted) {
-      console.log('Inkwell: Accessibility permission granted/re-enabled. Starting capture.');
+  if (hasChanged) {
+    lastKnownStatus = currentStatus;
+
+    if (isFullyAuthorized) {
+      console.log('Inkwell: Permissions fully authorized. Starting capture tap.');
       startCapture();
     } else {
       console.warn(
-        'Inkwell: Accessibility permission revoked or disabled in macOS System Settings. Stopping capture tap immediately.'
+        `Inkwell: Permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}). Stopping capture tap.`
       );
       stopCapture();
     }
 
-    broadcastPermissionState(isGranted);
+    broadcastPermissionState(currentStatus);
 
     if (statusChangeCallback) {
       try {
-        statusChangeCallback(isGranted);
+        statusChangeCallback(currentStatus);
       } catch (err) {
         console.error('Inkwell: Error in permission status callback:', err);
       }
     }
   }
 
-  return isGranted;
+  return currentStatus;
 }
 
 /**
- * Starts continuous background polling for macOS accessibility permission status.
- * Runs continuously for the entire app lifecycle to detect both grants and in-session revocations.
+ * Starts continuous background polling for macOS permissions.
+ * Uses only read-only status checks (no auto-prompts) every pollIntervalMs (default 2000ms).
  */
 export function startPermissionWatcher(
-  onStatusChange?: (granted: boolean) => void,
-  pollIntervalMs = 1000
+  onStatusChange?: (status: PermissionStatus) => void,
+  pollIntervalMs = 2000
 ): () => void {
   if (onStatusChange) {
     statusChangeCallback = onStatusChange;
@@ -107,4 +122,3 @@ export function stopPermissionWatcher(): void {
 export function isPermissionWatcherRunning(): boolean {
   return activeInterval !== null;
 }
-

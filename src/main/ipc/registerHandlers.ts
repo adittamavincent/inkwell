@@ -3,14 +3,17 @@ import {
   isCaptureRunning,
   startCapture,
   stopCapture,
-  restartCapture,
-  getCaptureHealth,
 } from '../capture/keyHook';
 import {
-  checkAccessibilityPermission,
+  checkAccessibilityStatus,
+  checkInputMonitoringStatus,
+  requestAccessibilityAccess,
+  requestInputMonitoringAccess,
   openAccessibilitySettings,
   openInputMonitoringSettings,
+  PermissionStatus,
 } from '../capture/permissions';
+import { checkAndSyncPermissionState } from '../capture/permissionWatcher';
 import { getFrontmostAppName } from '../capture/activeApp';
 import { loadAllHistory, clearHistory } from '../db/repository';
 import { getConfig, saveConfig, CogdexSyncConfig } from '../config/store';
@@ -22,18 +25,15 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     return isCaptureRunning();
   });
 
-  ipcMain.handle('inkwell:getCaptureHealth', () => {
-    return getCaptureHealth();
-  });
-
   ipcMain.handle('inkwell:getActiveApp', () => {
     return getFrontmostAppName();
   });
 
   ipcMain.handle('inkwell:toggleCapture', (_event, start: boolean) => {
     if (start) {
-      const hasPerm = checkAccessibilityPermission(false);
-      if (hasPerm) {
+      const acc = checkAccessibilityStatus();
+      const inp = checkInputMonitoringStatus();
+      if (acc === 'authorized' && inp === 'authorized') {
         startCapture();
       } else {
         stopCapture();
@@ -46,19 +46,18 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     return running;
   });
 
-  ipcMain.handle('inkwell:checkPermissions', (_event, prompt: boolean) => {
-    const hasPerm = checkAccessibilityPermission(prompt);
-    if (hasPerm) {
-      if (!isCaptureRunning()) {
-        startCapture();
-      }
-    } else {
-      if (isCaptureRunning()) {
-        stopCapture();
-      }
-    }
+  ipcMain.handle('inkwell:checkPermissions', (): PermissionStatus => {
+    const status = checkAndSyncPermissionState();
     updateTrayMenu(getMainWindow());
-    return hasPerm;
+    return status;
+  });
+
+  ipcMain.handle('inkwell:requestAccessibility', () => {
+    requestAccessibilityAccess();
+  });
+
+  ipcMain.handle('inkwell:requestInputMonitoring', () => {
+    requestInputMonitoringAccess();
   });
 
   ipcMain.handle('inkwell:openAccessibilitySettings', () => {

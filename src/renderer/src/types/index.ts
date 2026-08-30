@@ -1,4 +1,9 @@
-export type CaptureHealth = 'unconfirmed' | 'confirmed' | 'stalled';
+export type AuthStatus = 'authorized' | 'denied' | 'not determined' | 'restricted';
+
+export interface PermissionStatus {
+  accessibility: AuthStatus;
+  inputMonitoring: AuthStatus;
+}
 
 export interface CogdexSyncConfig {
   enabled: boolean;

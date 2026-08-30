@@ -100,6 +100,18 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
       {/* Form Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+        {/* Dev Mode TCC Identity Notice */}
+        {import.meta.env.DEV && (
+          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 space-y-1">
+            <div className="font-semibold text-blue-200 text-[11px] flex items-center gap-1.5">
+              <span>Dev Mode Permission Identity</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-blue-300/90">
+              Running in dev mode — permissions are separate from the packaged app. Grant access to the <strong className="text-blue-100 font-semibold">'Electron'</strong> entry in System Settings, not 'Inkwell'.
+            </p>
+          </div>
+        )}
+
         {/* Master Switch */}
         <div className="p-3 bg-ink-card rounded-lg border border-ink-border flex items-center justify-between">
           <div>

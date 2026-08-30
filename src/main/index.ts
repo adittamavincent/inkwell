@@ -3,8 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
-import { checkAccessibilityPermission } from './capture/permissions';
-import { startCapture, stopCapture } from './capture/keyHook';
+import { startPermissionWatcher, stopPermissionWatcher } from './capture/permissionWatcher';
+import { stopCapture } from './capture/keyHook';
 import { startActiveAppTracker, stopActiveAppTracker } from './capture/activeApp';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray, updateTrayMenu } from './tray/trayManager';
@@ -83,13 +83,10 @@ app.whenReady().then(() => {
   createWindow();
   setupTray(mainWindow);
 
-  // 5. Initial single non-prompting check at launch
-  const hasPerm = checkAccessibilityPermission(false);
-  if (hasPerm) {
-    startCapture();
-  } else {
-    stopCapture();
-  }
+  // 5. Start continuous background permission watcher (initial sync + polling)
+  startPermissionWatcher((_status) => {
+    updateTrayMenu(mainWindow);
+  }, 2000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -102,6 +99,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  stopPermissionWatcher();
   stopActiveAppTracker();
   stopCapture();
 });

@@ -9,7 +9,7 @@ import {
   SessionPreview,
   KeystrokePayload,
   SyncResponse,
-  CaptureHealth,
+  PermissionStatus,
 } from './types';
 import { reconstructText } from '../../shared/reconstructor';
 import { DEFAULT_CONFIG, CogdexSyncConfig } from '../../shared/constants';
@@ -23,10 +23,8 @@ interface SuspendedSession {
 
 export const App: React.FC = () => {
   const [isRunning, setIsRunning] = useState(true);
-  const [hasAccessibility, setHasAccessibility] = useState<boolean | null>(null);
-  const [captureHealth, setCaptureHealth] = useState<CaptureHealth>('unconfirmed');
+  const [permissions, setPermissions] = useState<PermissionStatus | null>(null);
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
-  const [isSuccessGate, setIsSuccessGate] = useState(false);
   const [detectedApp, setDetectedApp] = useState<string>('');
   const [config, setConfig] = useState<CogdexSyncConfig>(DEFAULT_CONFIG);
   const [history, setHistory] = useState<SessionPreview[]>([]);
@@ -83,6 +81,21 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const handlePermissionUpdate = useCallback((status: PermissionStatus) => {
+    setPermissions(status);
+    const fullyAuthorized =
+      status.accessibility === 'authorized' && status.inputMonitoring === 'authorized';
+
+    if (fullyAuthorized) {
+      setIsOnboarded(true);
+      window.inkwellApi?.getCaptureStatus().then(setIsRunning);
+    } else {
+      setIsRunning(false);
+      // If we haven't onboarded yet, keep onboarding gate active
+      setIsOnboarded((prev) => (prev === null ? false : prev));
+    }
+  }, []);
+
   // Initial Data Fetching & Realtime Keystroke Listener
   useEffect(() => {
     if (!window.inkwellApi) return;
@@ -90,40 +103,21 @@ export const App: React.FC = () => {
     window.inkwellApi.getConfig().then(setConfig);
     window.inkwellApi.getHistory().then(setHistory);
 
-    // Initial frontmost app & capture health
+    // Initial frontmost app
     window.inkwellApi.getActiveApp?.().then(setDetectedApp);
-    window.inkwellApi.getCaptureHealth?.().then(setCaptureHealth);
 
-    // Initial non-prompting permission check
-    window.inkwellApi.checkPermissions(false).then((granted) => {
-      setHasAccessibility(granted);
-      if (granted) {
-        window.inkwellApi?.getCaptureStatus().then(setIsRunning);
-        window.inkwellApi?.getCaptureHealth?.().then((health) => {
-          setCaptureHealth(health);
-          if (health === 'confirmed') {
-            setIsOnboarded(true);
-          } else {
-            // Keep gate or allow entering once verified
-            setIsOnboarded(true);
-          }
-        });
-      } else {
-        setIsOnboarded(false);
-      }
+    // Initial non-prompting permission status check
+    window.inkwellApi.checkPermissions().then((status) => {
+      handlePermissionUpdate(status);
+      const fullyAuthorized =
+        status.accessibility === 'authorized' && status.inputMonitoring === 'authorized';
+      setIsOnboarded(fullyAuthorized);
     });
 
     // Active App Changed Listener
     const unsubscribeActiveApp = window.inkwellApi.onActiveAppChanged?.((appName: string) => {
       setDetectedApp(appName);
     });
-
-    // Capture Health Changed Listener
-    const unsubscribeHealth = window.inkwellApi.onCaptureHealthChanged?.(
-      (health: CaptureHealth) => {
-        setCaptureHealth(health);
-      }
-    );
 
     // Keystroke Stream Listener
     const unsubscribeKeystroke = window.inkwellApi.onKeystroke((payload: KeystrokePayload) => {
@@ -220,45 +214,36 @@ export const App: React.FC = () => {
     });
 
     // Main Process Permission Watcher Event Listeners
+    const unsubscribeStatusChanged = window.inkwellApi.onPermissionStatusChanged?.(
+      (status: PermissionStatus) => {
+        handlePermissionUpdate(status);
+      }
+    );
+
     const unsubscribePermissionGranted = window.inkwellApi.onPermissionGranted?.(() => {
-      setHasAccessibility(true);
-      window.inkwellApi?.getCaptureStatus().then(setIsRunning);
-      window.inkwellApi?.getCaptureHealth?.().then(setCaptureHealth);
+      window.inkwellApi?.checkPermissions().then(handlePermissionUpdate);
     });
 
     const unsubscribePermissionRevoked = window.inkwellApi.onPermissionRevoked?.(() => {
-      setHasAccessibility(false);
       setIsRunning(false);
-      setIsOnboarded(false);
+      window.inkwellApi?.checkPermissions().then(handlePermissionUpdate);
     });
 
     return () => {
       unsubscribeActiveApp?.();
-      unsubscribeHealth?.();
       unsubscribeKeystroke();
+      unsubscribeStatusChanged?.();
       unsubscribePermissionGranted?.();
       unsubscribePermissionRevoked?.();
     };
-  }, []);
+  }, [handlePermissionUpdate]);
 
-  // Re-check permission on window focus to detect in-session revocation or grant
+  // Re-check permission on window focus to immediately detect in-session revocation or grant
   useEffect(() => {
     const checkPerm = () => {
       const api = window.inkwellApi;
       if (api) {
-        api.checkPermissions(false).then((granted) => {
-          setHasAccessibility(granted);
-          if (granted) {
-            api.getCaptureStatus().then(setIsRunning);
-            api.getCaptureHealth?.().then(setCaptureHealth);
-            if (isOnboarded === false) {
-              setIsOnboarded(true);
-            }
-          } else {
-            setIsRunning(false);
-            setIsOnboarded(false);
-          }
-        });
+        api.checkPermissions().then(handlePermissionUpdate);
       }
     };
 
@@ -266,7 +251,7 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('focus', checkPerm);
     };
-  }, [isOnboarded]);
+  }, [handlePermissionUpdate]);
 
   const handleToggleCapture = async () => {
     if (!window.inkwellApi) return;
@@ -333,14 +318,14 @@ export const App: React.FC = () => {
     return window.inkwellApi.forceSync();
   };
 
-  const handleRequestAccessibility = async (): Promise<boolean> => {
-    if (!window.inkwellApi) return false;
-    const granted = await window.inkwellApi.checkPermissions(false);
-    setHasAccessibility(granted);
-    if (granted) {
-      window.inkwellApi.getCaptureStatus().then(setIsRunning);
-    }
-    return granted;
+  const handleRequestAccessibility = async (): Promise<void> => {
+    if (!window.inkwellApi?.requestAccessibility) return;
+    await window.inkwellApi.requestAccessibility();
+  };
+
+  const handleRequestInputMonitoring = async (): Promise<void> => {
+    if (!window.inkwellApi?.requestInputMonitoring) return;
+    await window.inkwellApi.requestInputMonitoring();
   };
 
   const handleOpenAccessibilitySettings = async () => {
@@ -354,7 +339,7 @@ export const App: React.FC = () => {
   };
 
   // Loading state before initial check resolves (prevents flash of gate)
-  if (isOnboarded === null) {
+  if (isOnboarded === null || !permissions) {
     return <div className="h-screen w-screen bg-ink-bg" />;
   }
 
@@ -363,16 +348,15 @@ export const App: React.FC = () => {
     return (
       <PermissionGate
         onGranted={() => {
-          setHasAccessibility(true);
           setIsOnboarded(true);
           window.inkwellApi?.getCaptureStatus().then(setIsRunning);
         }}
-        hasAccessibility={hasAccessibility ?? false}
-        captureHealth={captureHealth}
+        accessibility={permissions.accessibility}
+        inputMonitoring={permissions.inputMonitoring}
         onRequestAccessibility={handleRequestAccessibility}
+        onRequestInputMonitoring={handleRequestInputMonitoring}
         onOpenAccessibilitySettings={handleOpenAccessibilitySettings}
         onOpenInputMonitoringSettings={handleOpenInputMonitoringSettings}
-        isGranted={isSuccessGate}
       />
     );
   }
@@ -397,11 +381,12 @@ export const App: React.FC = () => {
         sessionCount={effectiveSessionCount}
       />
 
-      {/* Safety Net Banner for in-session permission revocation / missing Input Monitoring */}
+      {/* Safety Net Banner for in-session permission revocation / missing permission */}
       <PermissionBanner
-        hasAccessibility={hasAccessibility ?? true}
-        captureHealth={captureHealth}
+        accessibility={permissions.accessibility}
+        inputMonitoring={permissions.inputMonitoring}
         onRequestAccessibility={handleRequestAccessibility}
+        onRequestInputMonitoring={handleRequestInputMonitoring}
         onOpenAccessibilitySettings={handleOpenAccessibilitySettings}
         onOpenInputMonitoringSettings={handleOpenInputMonitoringSettings}
       />

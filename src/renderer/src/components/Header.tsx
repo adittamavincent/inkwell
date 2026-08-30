@@ -42,6 +42,14 @@ export const Header: React.FC<HeaderProps> = ({
             <Feather className="w-4 h-4" />
           </div>
           <span className="font-semibold text-sm tracking-wide text-ink-text">Inkwell</span>
+          {import.meta.env.DEV && (
+            <span
+              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30"
+              title="Running in dev mode — permissions are separate from the packaged app (assigned to 'Electron' in macOS settings)."
+            >
+              DEV
+            </span>
+          )}
         </div>
 
         <div className="h-4 w-px bg-ink-border mx-1" />

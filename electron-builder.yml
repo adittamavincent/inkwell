@@ -11,7 +11,7 @@ files:
 mac:
   category: public.app-category.utilities
   identity: "Inkwell Dev"
-  hardenedRuntime: true
+  hardenedRuntime: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   gatekeeperAssess: false

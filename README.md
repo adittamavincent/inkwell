@@ -9,11 +9,12 @@
 
 ## How it works
 
-1. Global keystrokes are captured system-wide via `uiohook-napi` in the Electron main process (requires **Input Monitoring** / Accessibility permission in macOS System Settings).
-2. Each keystroke is encrypted at rest with **AES-256-GCM** before being inserted into SQLite (`better-sqlite3` in WAL mode) located in `~/Library/Application Support/com.inkwell.app/inkwell.db`.
+1. Global keystrokes are captured system-wide via `uiohook-napi` in the Electron main process (requires **Accessibility** and **Input Monitoring** permissions in macOS System Settings).
+2. Permission states are queried directly via native OS APIs (`node-mac-permissions` wrapping `AXIsProcessTrustedWithOptions` and `IOHIDCheckAccess`).
+3. Each keystroke is encrypted at rest with **AES-256-GCM** before being inserted into SQLite (`better-sqlite3` in WAL mode) located in `~/Library/Application Support/com.inkwell.app/inkwell.db`.
    The encryption key lives in a `0600` file (`db.key`) next to the database.
-3. When Cogdex sync is **enabled (opt-in, off by default)**, captured sessions are reconstructed into readable text and appended directly to today's dedicated daily keylog note (`<dailyFolderRoot>/<day>/<day><keylogSuffix>.md`).
-4. Live UI typing feed reconstructs text in real-time with cursor tracking, arrow navigation, word deletions, and selection overwriting.
+4. When Cogdex sync is **enabled (opt-in, off by default)**, captured sessions are reconstructed into readable text and appended directly to today's dedicated daily keylog note (`<dailyFolderRoot>/<day>/<day><keylogSuffix>.md`).
+5. Live UI typing feed reconstructs text in real-time with cursor tracking, arrow navigation, word deletions, and selection overwriting.
 
 The keylog note path mirrors Cogdex:
 
@@ -28,6 +29,7 @@ i.e. `<dailyFolderRoot>/<day>/<day><keylogSuffix>.md`.
 ## Features
 
 - **System‑wide keystroke capture** – works across all macOS apps.
+- **Native OS permission detection** – deterministic, read-only 3-state permission checks (`authorized`, `denied`, `not determined`) without heuristic polling latency or auto-prompt loops.
 - **Frontmost‑app detection** – every keystroke is tagged with the active app name (cached for 250ms for zero capture latency).
 - **App exclusion** – password managers (1Password, Bitwarden, KeePass, etc.) and Inkwell itself are excluded by default.
 - **Encrypted at rest** – AES-256-GCM encrypted database with graceful plaintext degradation fallback.
@@ -47,6 +49,33 @@ pnpm run test             # run all Vitest unit tests
 pnpm run typecheck        # TypeScript typecheck
 pnpm run build:renderer   # build renderer & electron main/preload bundles
 pnpm run build            # build and package for macOS (.dmg + .zip)
+```
+
+---
+
+## Testing Permissions: Dev vs Packaged App
+
+`pnpm dev` launches via `vite-plugin-electron` through the default `electron` binary from `node_modules/electron`. macOS TCC identifies this process as **`com.github.Electron` (named "Electron")**, completely separate from the signed, packaged **`com.inkwell.app` (named "Inkwell")**.
+
+- **Dev mode (`pnpm dev`)**: To test or grant permissions in dev mode, grant access to the **"Electron"** entry in macOS System Settings.
+- **Packaged App (`pnpm build`)**: To validate the exact permission flow an end user sees, test against `pnpm build` output installed into `/Applications`. Permissions granted here belong to **"Inkwell"**.
+
+### Resetting Permissions (Clean Slate)
+
+Reset dev mode permissions:
+```bash
+pnpm run reset-permissions:dev
+# or manually:
+tccutil reset Accessibility com.github.Electron
+tccutil reset ListenEvent com.github.Electron
+```
+
+Reset packaged app permissions:
+```bash
+pnpm run reset-permissions
+# or manually:
+tccutil reset Accessibility com.inkwell.app
+tccutil reset ListenEvent com.inkwell.app
 ```
 
 ---
@@ -76,18 +105,7 @@ To prevent macOS from revoking Accessibility and Input Monitoring permissions on
 
 Permissions granted in macOS System Settings will now persist across `pnpm run build` and reinstall cycles.
 
-> **Note**: CI/release builds (`.github/workflows/release.yml`) use Apple Developer ID certificates via the `CSC_NAME` secret, which takes precedence over local signing in CI environments.
-
-#### Permission Reset (Clean Slate):
-To completely reset granted TCC permissions for testing:
-```bash
-pnpm run reset-permissions
-```
-Or manually:
-```bash
-tccutil reset Accessibility com.inkwell.app
-tccutil reset ListenEvent com.inkwell.app
-```
+> **Note on Hardened Runtime**: Local self-signed certificates do not have an Apple Team ID chain, so `hardenedRuntime: false` is configured in `electron-builder.yml` for local builds. Production release builds paired with an official Apple Developer ID certificate and notarization will re-enable `hardenedRuntime: true`.
 
 ---
 

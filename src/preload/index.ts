@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { CogdexSyncConfig } from '../main/config/store';
 import type { SessionPreview } from '../main/sync/sessionGrouper';
-import type { CaptureHealth } from '../main/capture/keyHook';
+import type { AuthStatus, PermissionStatus } from '../main/capture/permissions';
 
-export type { CaptureHealth };
+export type { AuthStatus, PermissionStatus };
 
 export interface KeystrokePayload {
   timestamp: string;
@@ -38,27 +38,23 @@ export const api = {
     return ipcRenderer.invoke('inkwell:getActiveApp');
   },
 
-  // Capture Controls & Health
+  // Capture Controls
   getCaptureStatus: (): Promise<boolean> => {
     return ipcRenderer.invoke('inkwell:getCaptureStatus');
-  },
-  getCaptureHealth: (): Promise<CaptureHealth> => {
-    return ipcRenderer.invoke('inkwell:getCaptureHealth');
-  },
-  onCaptureHealthChanged: (callback: (health: CaptureHealth) => void) => {
-    const handler = (_event: any, health: CaptureHealth) => callback(health);
-    ipcRenderer.on('inkwell:captureHealthChanged', handler);
-    return () => {
-      ipcRenderer.removeListener('inkwell:captureHealthChanged', handler);
-    };
   },
   toggleCapture: (start: boolean): Promise<boolean> => {
     return ipcRenderer.invoke('inkwell:toggleCapture', start);
   },
 
-  // Permissions
-  checkPermissions: (prompt = false): Promise<boolean> => {
-    return ipcRenderer.invoke('inkwell:checkPermissions', prompt);
+  // Permissions (3/4-State Native OS Model)
+  checkPermissions: (): Promise<PermissionStatus> => {
+    return ipcRenderer.invoke('inkwell:checkPermissions');
+  },
+  requestAccessibility: (): Promise<void> => {
+    return ipcRenderer.invoke('inkwell:requestAccessibility');
+  },
+  requestInputMonitoring: (): Promise<void> => {
+    return ipcRenderer.invoke('inkwell:requestInputMonitoring');
   },
   openAccessibilitySettings: (): Promise<void> => {
     return ipcRenderer.invoke('inkwell:openAccessibilitySettings');
@@ -83,8 +79,8 @@ export const api = {
       ipcRenderer.removeListener('inkwell:permissionRevoked', handler);
     };
   },
-  onPermissionStatusChanged: (callback: (granted: boolean) => void) => {
-    const handler = (_event: any, granted: boolean) => callback(granted);
+  onPermissionStatusChanged: (callback: (status: PermissionStatus) => void) => {
+    const handler = (_event: any, status: PermissionStatus) => callback(status);
     ipcRenderer.on('inkwell:permissionStatusChanged', handler);
     return () => {
       ipcRenderer.removeListener('inkwell:permissionStatusChanged', handler);

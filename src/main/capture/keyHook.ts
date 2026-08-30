@@ -1,11 +1,9 @@
 import { BrowserWindow } from 'electron';
 import { mapKeyEventToToken, ModifierState, UiohookKeyboardEventLike, KEY } from './keyMapper';
 import { getFrontmostAppName } from './activeApp';
-import { checkAccessibilityPermission } from './permissions';
+import { checkAccessibilityStatus, checkInputMonitoringStatus } from './permissions';
 import { getConfig } from '../config/store';
 import { insertKeystroke } from '../db/repository';
-
-export type CaptureHealth = 'unconfirmed' | 'confirmed' | 'stalled';
 
 interface QueuedKeystroke {
   timestamp: string;
@@ -15,9 +13,6 @@ interface QueuedKeystroke {
 }
 
 let isRunning = false;
-let captureHealth: CaptureHealth = 'unconfirmed';
-let lastEventReceivedAt = 0;
-let healthCheckTimer: NodeJS.Timeout | null = null;
 const queue: QueuedKeystroke[] = [];
 let isProcessingQueue = false;
 
@@ -28,8 +23,7 @@ let hook: any = null;
 function getHook(): any {
   if (!hook) {
     // Dynamic require defers native addon initialization until after
-    // accessibility permission is confirmed. Static imports cause macOS
-    // to show the Accessibility dialog immediately at app startup.
+    // permission is confirmed. Static imports cause macOS to query/prompt prematurely.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     hook = require('uiohook-napi').uIOhook;
   }
@@ -48,22 +42,6 @@ const modifiers: ModifierState = {
   alt: false,
   meta: false,
 };
-
-function broadcastCaptureHealth(health: CaptureHealth): void {
-  const windows = BrowserWindow.getAllWindows();
-  for (const win of windows) {
-    if (!win.isDestroyed()) {
-      win.webContents.send('inkwell:captureHealthChanged', health);
-    }
-  }
-}
-
-function setCaptureHealth(health: CaptureHealth): void {
-  if (captureHealth !== health) {
-    captureHealth = health;
-    broadcastCaptureHealth(health);
-  }
-}
 
 function updateModifiers(keycode: number, isDown: boolean): void {
   if (keycode === KEY.Shift || keycode === KEY.ShiftRight) {
@@ -129,11 +107,6 @@ async function processQueue(): Promise<void> {
 }
 
 function handleKeyDown(e: UiohookKeyboardEventLike): void {
-  lastEventReceivedAt = Date.now();
-  if (captureHealth !== 'confirmed') {
-    setCaptureHealth('confirmed');
-  }
-
   updateModifiers(e.keycode, true);
 
   const token = mapKeyEventToToken(e, modifiers);
@@ -161,22 +134,21 @@ function handleKeyDown(e: UiohookKeyboardEventLike): void {
 }
 
 function handleKeyUp(e: UiohookKeyboardEventLike): void {
-  lastEventReceivedAt = Date.now();
-  if (captureHealth !== 'confirmed') {
-    setCaptureHealth('confirmed');
-  }
   updateModifiers(e.keycode, false);
 }
 
 export function startCapture(): boolean {
   if (isRunning) return true;
 
-  // 1. Strict pre-flight verification: NEVER start uIOhook without trusted accessibility
-  const isTrusted = checkAccessibilityPermission(false);
-  if (!isTrusted) {
-    console.warn('Inkwell: Cannot start capture tap — Accessibility permission is not granted.');
+  // 1. Strict pre-flight verification: NEVER start uIOhook without authorized accessibility & input monitoring
+  const accessibility = checkAccessibilityStatus();
+  const inputMonitoring = checkInputMonitoringStatus();
+
+  if (accessibility !== 'authorized' || inputMonitoring !== 'authorized') {
+    console.warn(
+      `Inkwell: Cannot start capture tap — Permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}).`
+    );
     isRunning = false;
-    setCaptureHealth('unconfirmed');
     return false;
   }
 
@@ -189,36 +161,15 @@ export function startCapture(): boolean {
     uIOhook.start();
 
     isRunning = true;
-
-    // Track capture health heartbeat for Input Monitoring verification
-    if (lastEventReceivedAt === 0) {
-      setCaptureHealth('unconfirmed');
-      if (healthCheckTimer) clearTimeout(healthCheckTimer);
-      healthCheckTimer = setTimeout(() => {
-        if (isRunning && captureHealth === 'unconfirmed') {
-          // Accessibility is granted, but no keystrokes arrived yet
-          setCaptureHealth('stalled');
-        }
-      }, 2500);
-    } else {
-      setCaptureHealth('confirmed');
-    }
-
     return true;
   } catch (err) {
     console.error('Inkwell: Failed to start uiohook key capture:', err);
     isRunning = false;
-    setCaptureHealth('unconfirmed');
     return false;
   }
 }
 
 export function stopCapture(): boolean {
-  if (healthCheckTimer) {
-    clearTimeout(healthCheckTimer);
-    healthCheckTimer = null;
-  }
-
   try {
     if (hook) {
       hook.removeAllListeners('keydown');
@@ -231,7 +182,6 @@ export function stopCapture(): boolean {
     console.error('Inkwell: Failed to stop uiohook key capture:', err);
   } finally {
     isRunning = false;
-    setCaptureHealth('unconfirmed');
   }
   return true;
 }
@@ -243,12 +193,4 @@ export function restartCapture(): boolean {
 
 export function isCaptureRunning(): boolean {
   return isRunning;
-}
-
-export function getCaptureHealth(): CaptureHealth {
-  return captureHealth;
-}
-
-export function getLastEventReceivedAt(): number {
-  return lastEventReceivedAt;
 }

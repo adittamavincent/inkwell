@@ -1,28 +1,31 @@
-import { systemPreferences, shell } from 'electron';
+import { getAuthStatus, askForAccessibilityAccess, askForInputMonitoringAccess } from 'node-mac-permissions';
+import { shell } from 'electron';
 
-let hasPromptedAccessibility = false;
+export type AuthStatus = 'authorized' | 'denied' | 'not determined' | 'restricted';
 
-export function checkAccessibilityPermission(prompt = false): boolean {
-  if (process.platform !== 'darwin') return true;
-  try {
-    // Check current trust first without prompting
-    const currentTrust = systemPreferences.isTrustedAccessibilityClient(false);
-    if (currentTrust) {
-      return true;
-    }
+export interface PermissionStatus {
+  accessibility: AuthStatus;
+  inputMonitoring: AuthStatus;
+}
 
-    // Only prompt the OS system dialog if requested, not already trusted, and not previously prompted
-    const shouldPrompt = prompt && !hasPromptedAccessibility;
-    if (shouldPrompt) {
-      hasPromptedAccessibility = true;
-      return systemPreferences.isTrustedAccessibilityClient(true);
-    }
+export function checkAccessibilityStatus(): AuthStatus {
+  if (process.platform !== 'darwin') return 'authorized';
+  return getAuthStatus('accessibility');
+}
 
-    return false;
-  } catch (err) {
-    console.warn('Inkwell: Failed to query accessibility permissions:', err);
-    return false;
-  }
+export function checkInputMonitoringStatus(): AuthStatus {
+  if (process.platform !== 'darwin') return 'authorized';
+  return getAuthStatus('input-monitoring');
+}
+
+export function requestAccessibilityAccess(): void {
+  if (process.platform !== 'darwin') return;
+  askForAccessibilityAccess();
+}
+
+export function requestInputMonitoringAccess(): void {
+  if (process.platform !== 'darwin') return;
+  askForInputMonitoringAccess();
 }
 
 export function openAccessibilitySettings(): void {
