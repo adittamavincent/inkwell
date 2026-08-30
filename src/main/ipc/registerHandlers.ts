@@ -12,10 +12,6 @@ import {
   openInputMonitoringSettings,
 } from '../capture/permissions';
 import { getFrontmostAppName } from '../capture/activeApp';
-import {
-  startPermissionWatcher,
-  isPermissionWatcherRunning,
-} from '../capture/permissionWatcher';
 import { loadAllHistory, clearHistory } from '../db/repository';
 import { getConfig, saveConfig, CogdexSyncConfig } from '../config/store';
 import { doSync } from '../sync/cogdexSync';
@@ -61,31 +57,20 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
         stopCapture();
       }
     }
-    if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher();
-    }
+    updateTrayMenu(getMainWindow());
     return hasPerm;
   });
 
   ipcMain.handle('inkwell:openAccessibilitySettings', () => {
     openAccessibilitySettings();
-    if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher();
-    }
   });
 
   ipcMain.handle('inkwell:openInputMonitoringSettings', () => {
     openInputMonitoringSettings();
-    if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher();
-    }
   });
 
   ipcMain.handle('inkwell:openSystemSettings', () => {
     openAccessibilitySettings();
-    if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher();
-    }
   });
 
   ipcMain.handle('inkwell:getHistory', () => {

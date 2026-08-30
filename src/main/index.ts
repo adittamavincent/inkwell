@@ -6,10 +6,6 @@ import { getDatabase } from './db/connection';
 import { checkAccessibilityPermission } from './capture/permissions';
 import { startCapture, stopCapture } from './capture/keyHook';
 import { startActiveAppTracker, stopActiveAppTracker } from './capture/activeApp';
-import {
-  startPermissionWatcher,
-  stopPermissionWatcher,
-} from './capture/permissionWatcher';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray, updateTrayMenu } from './tray/trayManager';
 
@@ -87,10 +83,13 @@ app.whenReady().then(() => {
   createWindow();
   setupTray(mainWindow);
 
-  // 5. Start continuous macOS accessibility permission watcher & capture synchronization
-  startPermissionWatcher((_granted) => {
-    updateTrayMenu(mainWindow);
-  });
+  // 5. Initial single non-prompting check at launch
+  const hasPerm = checkAccessibilityPermission(false);
+  if (hasPerm) {
+    startCapture();
+  } else {
+    stopCapture();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -104,7 +103,6 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   stopActiveAppTracker();
-  stopPermissionWatcher();
   stopCapture();
 });
 

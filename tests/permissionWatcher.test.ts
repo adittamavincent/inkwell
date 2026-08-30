@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock electron
 vi.mock('electron', () => ({
@@ -24,15 +24,10 @@ vi.mock('uiohook-napi', () => ({
   UiohookKey: {},
 }));
 
-describe('Permission Watcher & Capture Guard', () => {
+describe('Permission Check & Capture Guard (Non-persistent)', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-  });
-
-  afterEach(async () => {
-    const { stopPermissionWatcher } = await import('../src/main/capture/permissionWatcher');
-    stopPermissionWatcher();
   });
 
   it('does not start uIOhook if accessibility is false', async () => {
@@ -61,28 +56,20 @@ describe('Permission Watcher & Capture Guard', () => {
     expect(uIOhook.start).toHaveBeenCalled();
   });
 
-  it('stops capture immediately when permission transition is revoked', async () => {
+  it('stops capture cleanly when check reveals permission revoked', async () => {
     const { systemPreferences } = await import('electron');
     const { uIOhook } = await import('uiohook-napi');
     vi.mocked(systemPreferences.isTrustedAccessibilityClient).mockReturnValue(true);
 
-    const { startCapture, isCaptureRunning } = await import('../src/main/capture/keyHook');
+    const { startCapture, stopCapture, isCaptureRunning } = await import('../src/main/capture/keyHook');
     startCapture();
     expect(isCaptureRunning()).toBe(true);
 
-    const { startPermissionWatcher, checkAndSyncPermissionState } = await import(
-      '../src/main/capture/permissionWatcher'
-    );
-
-    const callback = vi.fn();
-    startPermissionWatcher(callback, 100);
-
-    // Now simulate user disabling accessibility in macOS System Settings
+    // Simulate user revoking permission and on-demand check stopping capture
     vi.mocked(systemPreferences.isTrustedAccessibilityClient).mockReturnValue(false);
-    checkAndSyncPermissionState();
+    stopCapture();
 
     expect(isCaptureRunning()).toBe(false);
     expect(uIOhook.stop).toHaveBeenCalled();
-    expect(callback).toHaveBeenCalledWith(false);
   });
 });
