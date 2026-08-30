@@ -39,14 +39,19 @@ export function checkInputMonitoringStatus(): AuthStatus {
 
 export function requestAccessibilityAccess(): void {
   if (process.platform !== 'darwin') return;
-  const perms = getMacPermissions();
-  perms?.askForAccessibilityAccess();
+  // Never trigger OS modal prompt — navigate directly to System Settings
+  openAccessibilitySettings();
 }
 
 export function requestInputMonitoringAccess(): void {
   if (process.platform !== 'darwin') return;
+  const status = checkInputMonitoringStatus();
   const perms = getMacPermissions();
-  perms?.askForInputMonitoringAccess();
+  if (status === 'not determined') {
+    perms?.askForInputMonitoringAccess();
+  } else {
+    openInputMonitoringSettings();
+  }
 }
 
 export function openAccessibilitySettings(): void {
