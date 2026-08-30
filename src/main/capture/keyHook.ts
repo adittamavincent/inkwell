@@ -1,9 +1,12 @@
+import { createRequire } from 'node:module';
 import { BrowserWindow } from 'electron';
 import { mapKeyEventToToken, ModifierState, UiohookKeyboardEventLike, KEY } from './keyMapper';
 import { getFrontmostAppName } from './activeApp';
 import { checkAccessibilityStatus, checkInputMonitoringStatus } from './permissions';
 import { getConfig } from '../config/store';
 import { insertKeystroke } from '../db/repository';
+
+const require = createRequire(import.meta.url);
 
 interface QueuedKeystroke {
   timestamp: string;

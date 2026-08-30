@@ -10,13 +10,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock node-mac-permissions
-vi.mock('node-mac-permissions', () => ({
-  getAuthStatus: vi.fn(),
-  askForAccessibilityAccess: vi.fn(),
-  askForInputMonitoringAccess: vi.fn(),
-}));
-
 describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -29,12 +22,18 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
   });
 
   it('does not start uIOhook if accessibility is not authorized', async () => {
-    const { getAuthStatus } = await import('node-mac-permissions');
-    vi.mocked(getAuthStatus).mockImplementation((type: string) => {
-      if (type === 'accessibility') return 'denied';
-      if (type === 'input-monitoring') return 'authorized';
-      return 'not determined';
-    });
+    const mockMacPerms = {
+      getAuthStatus: vi.fn((type: string) => {
+        if (type === 'accessibility') return 'denied';
+        if (type === 'input-monitoring') return 'authorized';
+        return 'not determined';
+      }),
+      askForAccessibilityAccess: vi.fn(),
+      askForInputMonitoringAccess: vi.fn(),
+    };
+
+    const { _setMacPermissionsForTesting } = await import('../src/main/capture/permissions');
+    _setMacPermissionsForTesting(mockMacPerms);
 
     const mockHook = { start: vi.fn(), stop: vi.fn(), on: vi.fn(), removeAllListeners: vi.fn() };
     const { _setHookForTesting, startCapture, isCaptureRunning } = await import(
@@ -50,12 +49,18 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
   });
 
   it('does not start uIOhook if input-monitoring is not authorized', async () => {
-    const { getAuthStatus } = await import('node-mac-permissions');
-    vi.mocked(getAuthStatus).mockImplementation((type: string) => {
-      if (type === 'accessibility') return 'authorized';
-      if (type === 'input-monitoring') return 'denied';
-      return 'not determined';
-    });
+    const mockMacPerms = {
+      getAuthStatus: vi.fn((type: string) => {
+        if (type === 'accessibility') return 'authorized';
+        if (type === 'input-monitoring') return 'denied';
+        return 'not determined';
+      }),
+      askForAccessibilityAccess: vi.fn(),
+      askForInputMonitoringAccess: vi.fn(),
+    };
+
+    const { _setMacPermissionsForTesting } = await import('../src/main/capture/permissions');
+    _setMacPermissionsForTesting(mockMacPerms);
 
     const mockHook = { start: vi.fn(), stop: vi.fn(), on: vi.fn(), removeAllListeners: vi.fn() };
     const { _setHookForTesting, startCapture, isCaptureRunning } = await import(
@@ -71,8 +76,14 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
   });
 
   it('starts uIOhook if both accessibility and input-monitoring are authorized', async () => {
-    const { getAuthStatus } = await import('node-mac-permissions');
-    vi.mocked(getAuthStatus).mockReturnValue('authorized');
+    const mockMacPerms = {
+      getAuthStatus: vi.fn().mockReturnValue('authorized'),
+      askForAccessibilityAccess: vi.fn(),
+      askForInputMonitoringAccess: vi.fn(),
+    };
+
+    const { _setMacPermissionsForTesting } = await import('../src/main/capture/permissions');
+    _setMacPermissionsForTesting(mockMacPerms);
 
     const mockHook = { start: vi.fn(), stop: vi.fn(), on: vi.fn(), removeAllListeners: vi.fn() };
     const { _setHookForTesting, startCapture, isCaptureRunning } = await import(
@@ -88,8 +99,18 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
   });
 
   it('stops capture cleanly when permission is revoked during checkAndSyncPermissionState', async () => {
-    const { getAuthStatus } = await import('node-mac-permissions');
-    vi.mocked(getAuthStatus).mockReturnValue('authorized');
+    let accStatus = 'authorized';
+    const mockMacPerms = {
+      getAuthStatus: vi.fn((type: string) => {
+        if (type === 'accessibility') return accStatus;
+        return 'authorized';
+      }),
+      askForAccessibilityAccess: vi.fn(),
+      askForInputMonitoringAccess: vi.fn(),
+    };
+
+    const { _setMacPermissionsForTesting } = await import('../src/main/capture/permissions');
+    _setMacPermissionsForTesting(mockMacPerms);
 
     const mockHook = { start: vi.fn(), stop: vi.fn(), on: vi.fn(), removeAllListeners: vi.fn() };
     const { _setHookForTesting, isCaptureRunning } = await import(
@@ -106,10 +127,7 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
     expect(isCaptureRunning()).toBe(true);
 
     // Revoke accessibility
-    vi.mocked(getAuthStatus).mockImplementation((type: string) => {
-      if (type === 'accessibility') return 'denied';
-      return 'authorized';
-    });
+    accStatus = 'denied';
 
     const status2 = checkAndSyncPermissionState();
     expect(status2).toEqual({ accessibility: 'denied', inputMonitoring: 'authorized' });
@@ -119,8 +137,16 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
 
   it('polls on interval and fires callback when status changes', async () => {
     vi.useFakeTimers();
-    const { getAuthStatus } = await import('node-mac-permissions');
-    vi.mocked(getAuthStatus).mockReturnValue('not determined');
+    let currentStatus = 'not determined';
+
+    const mockMacPerms = {
+      getAuthStatus: vi.fn(() => currentStatus),
+      askForAccessibilityAccess: vi.fn(),
+      askForInputMonitoringAccess: vi.fn(),
+    };
+
+    const { _setMacPermissionsForTesting } = await import('../src/main/capture/permissions');
+    _setMacPermissionsForTesting(mockMacPerms);
 
     const mockHook = { start: vi.fn(), stop: vi.fn(), on: vi.fn(), removeAllListeners: vi.fn() };
     const { _setHookForTesting } = await import('../src/main/capture/keyHook');
@@ -131,7 +157,7 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
     startPermissionWatcher(callback, 500);
 
     // Change status
-    vi.mocked(getAuthStatus).mockReturnValue('authorized');
+    currentStatus = 'authorized';
 
     vi.advanceTimersByTime(500);
 

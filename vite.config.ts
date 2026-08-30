@@ -33,6 +33,7 @@ export default defineConfig({
                 'better-sqlite3',
                 'uiohook-napi',
                 'active-win',
+                'node-mac-permissions',
               ],
             },
           },

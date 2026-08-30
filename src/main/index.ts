@@ -1,6 +1,9 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { startPermissionWatcher, stopPermissionWatcher } from './capture/permissionWatcher';
@@ -26,11 +29,21 @@ if (!gotTheLock) {
 
 function createWindow(): void {
   const appRoot = app.getAppPath();
-  const preloadCjs = path.join(appRoot, 'dist-electron/preload/index.cjs');
-  const preloadPath = fs.existsSync(preloadCjs)
-    ? preloadCjs
-    : path.join(appRoot, 'dist-electron/preload/index.js');
-  const htmlPath = path.join(appRoot, 'dist/index.html');
+  const preloadCandidates = [
+    path.join(appRoot, 'dist-electron/preload/index.cjs'),
+    path.join(appRoot, '../preload/index.cjs'),
+    path.join(__dirname, '../preload/index.cjs'),
+    path.join(appRoot, 'dist-electron/preload/index.js'),
+  ];
+  const preloadPath = preloadCandidates.find((p) => fs.existsSync(p)) || preloadCandidates[0];
+
+  const htmlCandidates = [
+    path.join(appRoot, 'dist/index.html'),
+    path.join(appRoot, '../dist/index.html'),
+    path.join(appRoot, '../../dist/index.html'),
+    path.join(__dirname, '../../dist/index.html'),
+  ];
+  const htmlPath = htmlCandidates.find((p) => fs.existsSync(p)) || htmlCandidates[0];
 
   mainWindow = new BrowserWindow({
     width: 1040,
