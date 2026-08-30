@@ -41,12 +41,12 @@ i.e. `<dailyFolderRoot>/<day>/<day><keylogSuffix>.md`.
 ## Development & Testing
 
 ```bash
-npm install              # install dependencies
-npm run dev              # launch Electron + React dev server with HMR
-npm run test             # run all Vitest unit tests
-npm run typecheck        # TypeScript typecheck
-npm run build:renderer   # build renderer & electron main/preload bundles
-npm run build            # build and package for macOS
+pnpm install              # install dependencies
+pnpm run dev              # launch Electron + React dev server with HMR
+pnpm run test             # run all Vitest unit tests
+pnpm run typecheck        # TypeScript typecheck
+pnpm run build:renderer   # build renderer & electron main/preload bundles
+pnpm run build            # build and package for macOS (.dmg + .zip)
 ```
 
 ---
@@ -56,7 +56,9 @@ npm run build            # build and package for macOS
 Bundling is handled by `electron-builder` targeting macOS Apple Silicon (`arm64`):
 
 ```bash
-npx electron-builder --mac dmg --arm64
+pnpm run build
+# or to output unpacked .app directory only:
+pnpm run pack
 ```
 
 The GitHub Actions workflow (`.github/workflows/release.yml`) codesigns with Developer ID, verifies non-ad-hoc signing, notarizes with `xcrun notarytool`, staples tickets, and creates a draft GitHub Release on tag push.

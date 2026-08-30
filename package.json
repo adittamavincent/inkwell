@@ -3,12 +3,13 @@
   "version": "0.2.0",
   "type": "module",
   "description": "macOS system-wide keystroke logger with optional Obsidian vault sync",
+  "author": "Vincent",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "build": "tsc && vite build && electron-builder --mac dmg zip --arm64 -c.mac.identity=null",
     "build:renderer": "tsc && vite build",
-    "rebuild": "PYTHON=/usr/bin/python3 electron-rebuild",
+    "pack": "tsc && vite build && electron-builder --dir -c.mac.identity=null",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -24,14 +25,13 @@
     "uiohook-napi": "^1.5.4"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.7",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "electron": "^33.2.1",
+    "electron": "33.2.1",
     "electron-builder": "^25.1.8",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",

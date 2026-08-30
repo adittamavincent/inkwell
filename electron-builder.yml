@@ -1,5 +1,6 @@
 appId: com.inkwell.app
 productName: Inkwell
+electronVersion: 33.2.1
 directories:
   output: release
   buildResources: build
@@ -7,9 +8,11 @@ files:
   - dist/**/*
   - dist-electron/**/*
   - package.json
-  - node_modules/**/*
 mac:
   category: public.app-category.utilities
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
   target:
     - target: dmg
       arch:
@@ -18,10 +21,6 @@ mac:
       arch:
         - arm64
   icon: icons/icon.icns
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
 dmg:
   sign: false
   artifactName: ${productName}-${version}-mac-arm64.${ext}
