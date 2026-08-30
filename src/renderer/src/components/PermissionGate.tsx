@@ -32,6 +32,7 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
 }) => {
   const [isOpeningAccessibility, setIsOpeningAccessibility] = useState(false);
   const [isOpeningInputMonitoring, setIsOpeningInputMonitoring] = useState(false);
+  const [hasRequestedPrompt, setHasRequestedPrompt] = useState(false);
 
   const isInputConfirmed = captureHealth === 'confirmed';
   const allSet = isGranted || (hasAccessibility && isInputConfirmed);
@@ -39,7 +40,10 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
   const handleAccessibility = async () => {
     setIsOpeningAccessibility(true);
     try {
-      await onRequestAccessibility();
+      if (!hasRequestedPrompt && !hasAccessibility) {
+        setHasRequestedPrompt(true);
+        await onRequestAccessibility();
+      }
       await onOpenAccessibilitySettings();
     } catch (err) {
       console.error('Failed to open accessibility settings:', err);
