@@ -1,21 +1,11 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { checkAccessibilityPermission } from './capture/permissions';
 import { startCapture, stopCapture } from './capture/keyHook';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray } from './tray/trayManager';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// The built directory structure
-process.env.DIST = path.join(__dirname, '../..');
-process.env.VITE_PUBLIC = app.isPackaged
-  ? process.env.DIST
-  : path.join(process.env.DIST, '../src/renderer/public');
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -33,6 +23,10 @@ if (!gotTheLock) {
 }
 
 function createWindow(): void {
+  const appRoot = app.getAppPath();
+  const preloadPath = path.join(appRoot, 'dist-electron/preload/index.js');
+  const htmlPath = path.join(appRoot, 'dist/index.html');
+
   mainWindow = new BrowserWindow({
     width: 1040,
     height: 720,
@@ -45,7 +39,7 @@ function createWindow(): void {
     visualEffectState: 'active',
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: preloadPath,
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
@@ -64,7 +58,7 @@ function createWindow(): void {
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    mainWindow.loadFile(path.join(process.env.DIST || path.join(__dirname, '../..'), 'index.html'));
+    mainWindow.loadFile(htmlPath);
   }
 }
 

@@ -7,9 +7,11 @@ import renderer from 'vite-plugin-electron-renderer';
 export default defineConfig({
   root: path.join(__dirname, 'src/renderer'),
   publicDir: path.join(__dirname, 'src/renderer/public'),
+  base: './',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src/renderer/src'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
       '@main': path.resolve(__dirname, 'src/main'),
       '@preload': path.resolve(__dirname, 'src/preload'),
     },

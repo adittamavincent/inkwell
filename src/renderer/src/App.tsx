@@ -5,7 +5,7 @@ import { SessionHistory } from './components/SessionHistory';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { PermissionBanner } from './components/PermissionBanner';
 import { CogdexSyncConfig, SessionPreview, KeystrokePayload, SyncResponse } from './types';
-import { reconstructText } from '../../main/sync/reconstructor';
+import { reconstructText } from '../../shared/reconstructor';
 
 const DEFAULT_CONFIG: CogdexSyncConfig = {
   enabled: false,
