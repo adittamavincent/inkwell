@@ -8,8 +8,10 @@ files:
   - dist/**/*
   - dist-electron/**/*
   - package.json
+afterPack: build/afterPack.cjs
 mac:
   category: public.app-category.utilities
+  identity: null
   hardenedRuntime: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
