@@ -41,7 +41,7 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ app, text, tokenCount }) => 
       </div>
 
       <div className="font-mono text-sm bg-ink-bg p-3 rounded-lg border border-ink-border/80 text-ink-text whitespace-pre-wrap break-words min-h-[52px]">
-        {text}
+        {text || <span className="text-ink-muted/60 italic font-sans text-xs">Capturing keystrokes...</span>}
         <span className="inline-block w-2 h-4 bg-ink-accent ml-0.5 -mb-0.5 animate-cursor-blink" />
       </div>
     </div>

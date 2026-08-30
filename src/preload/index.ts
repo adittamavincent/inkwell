@@ -35,6 +35,16 @@ export const api = {
   checkPermissions: (prompt = false): Promise<boolean> => {
     return ipcRenderer.invoke('inkwell:checkPermissions', prompt);
   },
+  openSystemSettings: (): Promise<void> => {
+    return ipcRenderer.invoke('inkwell:openSystemSettings');
+  },
+  onPermissionGranted: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('inkwell:permissionGranted', handler);
+    return () => {
+      ipcRenderer.removeListener('inkwell:permissionGranted', handler);
+    };
+  },
 
   // History Actions
   getHistory: (): Promise<SessionPreview[]> => {

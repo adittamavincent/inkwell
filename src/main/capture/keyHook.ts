@@ -78,6 +78,11 @@ async function processQueue(): Promise<void> {
     }
   } finally {
     isProcessingQueue = false;
+    if (queue.length > 0) {
+      setImmediate(() => {
+        processQueue();
+      });
+    }
   }
 }
 
@@ -116,6 +121,8 @@ export function startCapture(): boolean {
   if (isRunning) return true;
 
   try {
+    uIOhook.removeAllListeners('keydown');
+    uIOhook.removeAllListeners('keyup');
     uIOhook.on('keydown', handleKeyDown);
     uIOhook.on('keyup', handleKeyUp);
     uIOhook.start();
@@ -132,14 +139,19 @@ export function stopCapture(): boolean {
 
   try {
     uIOhook.stop();
-    uIOhook.removeListener('keydown', handleKeyDown);
-    uIOhook.removeListener('keyup', handleKeyUp);
+    uIOhook.removeAllListeners('keydown');
+    uIOhook.removeAllListeners('keyup');
     isRunning = false;
     return true;
   } catch (err) {
     console.error('Inkwell: Failed to stop uiohook key capture:', err);
     return false;
   }
+}
+
+export function restartCapture(): boolean {
+  stopCapture();
+  return startCapture();
 }
 
 export function isCaptureRunning(): boolean {

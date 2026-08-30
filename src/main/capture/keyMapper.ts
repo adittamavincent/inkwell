@@ -57,6 +57,21 @@ const KEY_CHAR_MAP: Record<number, { normal: string; shift: string }> = {
   [UiohookKey.Comma]: { normal: ',', shift: '<' },
   [UiohookKey.Period]: { normal: '.', shift: '>' },
   [UiohookKey.Slash]: { normal: '/', shift: '?' },
+  [UiohookKey.Numpad0]: { normal: '0', shift: '0' },
+  [UiohookKey.Numpad1]: { normal: '1', shift: '1' },
+  [UiohookKey.Numpad2]: { normal: '2', shift: '2' },
+  [UiohookKey.Numpad3]: { normal: '3', shift: '3' },
+  [UiohookKey.Numpad4]: { normal: '4', shift: '4' },
+  [UiohookKey.Numpad5]: { normal: '5', shift: '5' },
+  [UiohookKey.Numpad6]: { normal: '6', shift: '6' },
+  [UiohookKey.Numpad7]: { normal: '7', shift: '7' },
+  [UiohookKey.Numpad8]: { normal: '8', shift: '8' },
+  [UiohookKey.Numpad9]: { normal: '9', shift: '9' },
+  [UiohookKey.NumpadAdd]: { normal: '+', shift: '+' },
+  [UiohookKey.NumpadSubtract]: { normal: '-', shift: '-' },
+  [UiohookKey.NumpadMultiply]: { normal: '*', shift: '*' },
+  [UiohookKey.NumpadDivide]: { normal: '/', shift: '/' },
+  [UiohookKey.NumpadDecimal]: { normal: '.', shift: '.' },
 };
 
 /**

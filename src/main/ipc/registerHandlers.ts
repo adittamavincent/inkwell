@@ -1,6 +1,10 @@
 import { ipcMain, clipboard, BrowserWindow } from 'electron';
-import { isCaptureRunning, startCapture, stopCapture } from '../capture/keyHook';
-import { checkAccessibilityPermission } from '../capture/permissions';
+import { isCaptureRunning, startCapture, stopCapture, restartCapture } from '../capture/keyHook';
+import { checkAccessibilityPermission, openAccessibilitySettings } from '../capture/permissions';
+import {
+  startPermissionWatcher,
+  isPermissionWatcherRunning,
+} from '../capture/permissionWatcher';
 import { loadAllHistory, clearHistory } from '../db/repository';
 import { getConfig, saveConfig, CogdexSyncConfig } from '../config/store';
 import { doSync } from '../sync/cogdexSync';
@@ -23,7 +27,34 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   });
 
   ipcMain.handle('inkwell:checkPermissions', (_event, prompt: boolean) => {
-    return checkAccessibilityPermission(prompt);
+    const hasPerm = checkAccessibilityPermission(prompt);
+    if (hasPerm) {
+      if (!isCaptureRunning()) {
+        startCapture();
+      }
+    } else if (!isPermissionWatcherRunning()) {
+      startPermissionWatcher(() => {
+        startCapture();
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('inkwell:permissionGranted');
+        }
+      });
+    }
+    return hasPerm;
+  });
+
+  ipcMain.handle('inkwell:openSystemSettings', () => {
+    openAccessibilitySettings();
+    if (!isPermissionWatcherRunning()) {
+      startPermissionWatcher(() => {
+        startCapture();
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('inkwell:permissionGranted');
+        }
+      });
+    }
   });
 
   ipcMain.handle('inkwell:getHistory', () => {

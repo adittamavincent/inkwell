@@ -1,9 +1,14 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { checkAccessibilityPermission } from './capture/permissions';
 import { startCapture, stopCapture } from './capture/keyHook';
+import {
+  startPermissionWatcher,
+  stopPermissionWatcher,
+} from './capture/permissionWatcher';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray } from './tray/trayManager';
 
@@ -24,7 +29,10 @@ if (!gotTheLock) {
 
 function createWindow(): void {
   const appRoot = app.getAppPath();
-  const preloadPath = path.join(appRoot, 'dist-electron/preload/index.js');
+  const preloadCjs = path.join(appRoot, 'dist-electron/preload/index.cjs');
+  const preloadPath = fs.existsSync(preloadCjs)
+    ? preloadCjs
+    : path.join(appRoot, 'dist-electron/preload/index.js');
   const htmlPath = path.join(appRoot, 'dist/index.html');
 
   mainWindow = new BrowserWindow({
@@ -43,6 +51,7 @@ function createWindow(): void {
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -74,16 +83,24 @@ app.whenReady().then(() => {
   createWindow();
   setupTray(mainWindow);
 
-  // 4. Check macOS Input Monitoring / Accessibility permissions
-  const hasPerm = checkAccessibilityPermission(true);
-  if (!hasPerm) {
+  // 4. Check macOS Input Monitoring / Accessibility permissions (non-prompting on start)
+  const hasPerm = checkAccessibilityPermission(false);
+  if (hasPerm) {
+    // 5. Start global key listener immediately for returning granted users
+    startCapture();
+  } else {
     console.warn(
-      'Inkwell: Accessibility / Input Monitoring permission not granted. Global key capture may not receive events.'
+      'Inkwell: Accessibility permission not yet granted. Starting main process permission watcher.'
     );
+    // Start background watcher in main process (immune to renderer throttling)
+    startPermissionWatcher(() => {
+      console.log('Inkwell: Permission granted detected by main watcher. Starting capture.');
+      startCapture();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('inkwell:permissionGranted');
+      }
+    });
   }
-
-  // 5. Start global key listener
-  startCapture();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -96,6 +113,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  stopPermissionWatcher();
   stopCapture();
 });
 
