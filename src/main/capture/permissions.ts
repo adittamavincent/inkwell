@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { shell } from 'electron';
+import { shell, systemPreferences } from 'electron';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,6 +27,13 @@ export interface PermissionStatus {
 
 export function checkAccessibilityStatus(): AuthStatus {
   if (process.platform !== 'darwin') return 'authorized';
+  if (macPermissions && typeof macPermissions.getAuthStatus === 'function') {
+    return macPermissions.getAuthStatus('accessibility');
+  }
+  // systemPreferences.isTrustedAccessibilityClient(false) guarantees no OS dialog popup
+  if (systemPreferences && typeof systemPreferences.isTrustedAccessibilityClient === 'function') {
+    return systemPreferences.isTrustedAccessibilityClient(false) ? 'authorized' : 'denied';
+  }
   const perms = getMacPermissions();
   return perms ? perms.getAuthStatus('accessibility') : 'authorized';
 }
@@ -39,8 +46,15 @@ export function checkInputMonitoringStatus(): AuthStatus {
 
 export function requestAccessibilityAccess(): void {
   if (process.platform !== 'darwin') return;
-  // Never trigger OS modal prompt — navigate directly to System Settings
-  openAccessibilitySettings();
+  if (systemPreferences && typeof systemPreferences.isTrustedAccessibilityClient === 'function') {
+    // Calling with true triggers the standard macOS prompt dialog once
+    const isTrusted = systemPreferences.isTrustedAccessibilityClient(true);
+    if (!isTrusted) {
+      openAccessibilitySettings();
+    }
+  } else {
+    openAccessibilitySettings();
+  }
 }
 
 export function requestInputMonitoringAccess(): void {

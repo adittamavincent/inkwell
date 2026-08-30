@@ -8,7 +8,7 @@ import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { startPermissionWatcher, stopPermissionWatcher } from './capture/permissionWatcher';
 import { stopCapture } from './capture/keyHook';
-import { startActiveAppTracker, stopActiveAppTracker } from './capture/activeApp';
+import { stopActiveAppTracker } from './capture/activeApp';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray, updateTrayMenu } from './tray/trayManager';
 
@@ -86,10 +86,7 @@ app.whenReady().then(() => {
   loadConfig();
   getDatabase();
 
-  // 2. Start frontmost app tracker
-  startActiveAppTracker();
-
-  // 3. Register IPC bridge
+  // 2. Register IPC bridge
   registerIpcHandlers(() => mainWindow);
 
   // 4. Create window & Tray

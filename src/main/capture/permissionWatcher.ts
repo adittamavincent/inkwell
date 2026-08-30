@@ -5,6 +5,7 @@ import {
   PermissionStatus,
 } from './permissions';
 import { startCapture, stopCapture, isCaptureRunning } from './keyHook';
+import { startActiveAppTracker, stopActiveAppTracker } from './activeApp';
 
 let activeInterval: NodeJS.Timeout | null = null;
 let lastKnownStatus: PermissionStatus | null = null;
@@ -42,10 +43,12 @@ export function checkAndSyncPermissionState(): PermissionStatus {
   if (lastKnownStatus === null) {
     lastKnownStatus = currentStatus;
     if (isFullyAuthorized) {
+      startActiveAppTracker();
       if (!isCaptureRunning()) {
         startCapture();
       }
     } else {
+      stopActiveAppTracker();
       if (isCaptureRunning()) {
         stopCapture();
       }
@@ -61,12 +64,14 @@ export function checkAndSyncPermissionState(): PermissionStatus {
     lastKnownStatus = currentStatus;
 
     if (isFullyAuthorized) {
-      console.log('Inkwell: Permissions fully authorized. Starting capture tap.');
+      console.log('Inkwell: Permissions fully authorized. Starting capture tap & app tracker.');
+      startActiveAppTracker();
       startCapture();
     } else {
       console.warn(
-        `Inkwell: Permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}). Stopping capture tap.`
+        `Inkwell: Permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}). Stopping capture tap & app tracker.`
       );
+      stopActiveAppTracker();
       stopCapture();
     }
 

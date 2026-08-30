@@ -240,10 +240,18 @@ export const App: React.FC = () => {
 
   // Re-check permission on window focus to immediately detect in-session revocation or grant
   useEffect(() => {
+    let isChecking = false;
     const checkPerm = () => {
       const api = window.inkwellApi;
-      if (api) {
-        api.checkPermissions().then(handlePermissionUpdate);
+      if (api && !isChecking) {
+        isChecking = true;
+        api.checkPermissions()
+          .then(handlePermissionUpdate)
+          .finally(() => {
+            setTimeout(() => {
+              isChecking = false;
+            }, 500);
+          });
       }
     };
 
