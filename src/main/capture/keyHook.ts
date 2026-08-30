@@ -151,6 +151,15 @@ function handleKeyUp(e: UiohookKeyboardEvent): void {
 export function startCapture(): boolean {
   if (isRunning) return true;
 
+  // 1. Strict pre-flight verification: NEVER start uIOhook without trusted accessibility
+  const isTrusted = checkAccessibilityPermission(false);
+  if (!isTrusted) {
+    console.warn('Inkwell: Cannot start capture tap — Accessibility permission is not granted.');
+    isRunning = false;
+    setCaptureHealth('unconfirmed');
+    return false;
+  }
+
   try {
     uIOhook.removeAllListeners('keydown');
     uIOhook.removeAllListeners('keyup');
@@ -158,21 +167,9 @@ export function startCapture(): boolean {
     uIOhook.on('keyup', handleKeyUp);
     uIOhook.start();
 
-    // 1a: Immediate post-start verification of accessibility trust
-    const isTrusted = checkAccessibilityPermission(false);
-    if (!isTrusted) {
-      console.warn('Inkwell: Accessibility permission not trusted after start. Stopping hook tap.');
-      uIOhook.stop();
-      uIOhook.removeAllListeners('keydown');
-      uIOhook.removeAllListeners('keyup');
-      isRunning = false;
-      setCaptureHealth('unconfirmed');
-      return false;
-    }
-
     isRunning = true;
 
-    // 1b: Track capture health heartbeat for Input Monitoring verification
+    // Track capture health heartbeat for Input Monitoring verification
     if (lastEventReceivedAt === 0) {
       setCaptureHealth('unconfirmed');
       if (healthCheckTimer) clearTimeout(healthCheckTimer);
@@ -201,18 +198,19 @@ export function stopCapture(): boolean {
     healthCheckTimer = null;
   }
 
-  if (!isRunning) return true;
-
   try {
-    uIOhook.stop();
     uIOhook.removeAllListeners('keydown');
     uIOhook.removeAllListeners('keyup');
-    isRunning = false;
-    return true;
+    if (isRunning) {
+      uIOhook.stop();
+    }
   } catch (err) {
     console.error('Inkwell: Failed to stop uiohook key capture:', err);
-    return false;
+  } finally {
+    isRunning = false;
+    setCaptureHealth('unconfirmed');
   }
+  return true;
 }
 
 export function restartCapture(): boolean {

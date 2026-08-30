@@ -36,7 +36,12 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
 
   ipcMain.handle('inkwell:toggleCapture', (_event, start: boolean) => {
     if (start) {
-      startCapture();
+      const hasPerm = checkAccessibilityPermission(false);
+      if (hasPerm) {
+        startCapture();
+      } else {
+        stopCapture();
+      }
     } else {
       stopCapture();
     }
@@ -51,14 +56,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
       if (!isCaptureRunning()) {
         startCapture();
       }
-    } else if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher(() => {
-        startCapture();
-        const win = getMainWindow();
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('inkwell:permissionGranted');
-        }
-      });
+    } else {
+      if (isCaptureRunning()) {
+        stopCapture();
+      }
+    }
+    if (!isPermissionWatcherRunning()) {
+      startPermissionWatcher();
     }
     return hasPerm;
   });
@@ -66,39 +70,21 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   ipcMain.handle('inkwell:openAccessibilitySettings', () => {
     openAccessibilitySettings();
     if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher(() => {
-        startCapture();
-        const win = getMainWindow();
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('inkwell:permissionGranted');
-        }
-      });
+      startPermissionWatcher();
     }
   });
 
   ipcMain.handle('inkwell:openInputMonitoringSettings', () => {
     openInputMonitoringSettings();
     if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher(() => {
-        startCapture();
-        const win = getMainWindow();
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('inkwell:permissionGranted');
-        }
-      });
+      startPermissionWatcher();
     }
   });
 
   ipcMain.handle('inkwell:openSystemSettings', () => {
     openAccessibilitySettings();
     if (!isPermissionWatcherRunning()) {
-      startPermissionWatcher(() => {
-        startCapture();
-        const win = getMainWindow();
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('inkwell:permissionGranted');
-        }
-      });
+      startPermissionWatcher();
     }
   });
 

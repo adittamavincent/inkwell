@@ -219,17 +219,25 @@ export const App: React.FC = () => {
       setLiveText(reconstructText(currentTokens));
     });
 
-    // Main Process Permission Watcher Event Listener
-    const unsubscribePermission = window.inkwellApi.onPermissionGranted?.(() => {
+    // Main Process Permission Watcher Event Listeners
+    const unsubscribePermissionGranted = window.inkwellApi.onPermissionGranted?.(() => {
       setHasAccessibility(true);
       window.inkwellApi?.getCaptureStatus().then(setIsRunning);
+      window.inkwellApi?.getCaptureHealth?.().then(setCaptureHealth);
+    });
+
+    const unsubscribePermissionRevoked = window.inkwellApi.onPermissionRevoked?.(() => {
+      setHasAccessibility(false);
+      setIsRunning(false);
+      setIsOnboarded(false);
     });
 
     return () => {
       unsubscribeActiveApp?.();
       unsubscribeHealth?.();
       unsubscribeKeystroke();
-      unsubscribePermission?.();
+      unsubscribePermissionGranted?.();
+      unsubscribePermissionRevoked?.();
     };
   }, []);
 
@@ -246,6 +254,9 @@ export const App: React.FC = () => {
             if (isOnboarded === false) {
               setIsOnboarded(true);
             }
+          } else {
+            setIsRunning(false);
+            setIsOnboarded(false);
           }
         });
       }

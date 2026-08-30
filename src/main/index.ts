@@ -11,7 +11,7 @@ import {
   stopPermissionWatcher,
 } from './capture/permissionWatcher';
 import { registerIpcHandlers } from './ipc/registerHandlers';
-import { setupTray } from './tray/trayManager';
+import { setupTray, updateTrayMenu } from './tray/trayManager';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -87,24 +87,10 @@ app.whenReady().then(() => {
   createWindow();
   setupTray(mainWindow);
 
-  // 5. Check macOS Input Monitoring / Accessibility permissions (non-prompting on start)
-  const hasPerm = checkAccessibilityPermission(false);
-  if (hasPerm) {
-    // 6. Start global key listener immediately for returning granted users
-    startCapture();
-  } else {
-    console.warn(
-      'Inkwell: Accessibility permission not yet granted. Starting main process permission watcher.'
-    );
-    // Start background watcher in main process (immune to renderer throttling)
-    startPermissionWatcher(() => {
-      console.log('Inkwell: Permission granted detected by main watcher. Starting capture.');
-      startCapture();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('inkwell:permissionGranted');
-      }
-    });
-  }
+  // 5. Start continuous macOS accessibility permission watcher & capture synchronization
+  startPermissionWatcher((_granted) => {
+    updateTrayMenu(mainWindow);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

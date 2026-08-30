@@ -76,6 +76,20 @@ export const api = {
       ipcRenderer.removeListener('inkwell:permissionGranted', handler);
     };
   },
+  onPermissionRevoked: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('inkwell:permissionRevoked', handler);
+    return () => {
+      ipcRenderer.removeListener('inkwell:permissionRevoked', handler);
+    };
+  },
+  onPermissionStatusChanged: (callback: (granted: boolean) => void) => {
+    const handler = (_event: any, granted: boolean) => callback(granted);
+    ipcRenderer.on('inkwell:permissionStatusChanged', handler);
+    return () => {
+      ipcRenderer.removeListener('inkwell:permissionStatusChanged', handler);
+    };
+  },
 
   // History Actions
   getHistory: (): Promise<SessionPreview[]> => {
