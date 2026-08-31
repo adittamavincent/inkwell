@@ -7,7 +7,9 @@ export interface KeystrokeRow {
 }
 
 export interface SessionPreview {
-  start: Date;
+  start: Date | string;
+  startIso?: string;
+  endIso?: string;
   app: string;
   text: string;
 }
@@ -148,6 +150,8 @@ export function groupSessions(
     const startDate = new Date(s.start);
     result.push({
       start: isNaN(startDate.getTime()) ? new Date() : startDate,
+      startIso: s.start,
+      endIso: s.last,
       app: s.app,
       text,
     });

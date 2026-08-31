@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, clipboard } from 'electron';
 import { mapKeyEventToToken, ModifierState, UiohookKeyboardEventLike, KEY } from './keyMapper';
 import { getFrontmostAppName } from './activeApp';
 import { checkAccessibilityStatus, checkInputMonitoringStatus } from './permissions';
@@ -18,6 +18,7 @@ interface QueuedKeystroke {
 let isRunning = false;
 const queue: QueuedKeystroke[] = [];
 let isProcessingQueue = false;
+const recentKeys: string[] = [];
 
 // Lazily loaded uiohook handle — only populated after permission granted
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,11 +123,55 @@ function handleKeyDown(e: UiohookKeyboardEventLike): void {
     return;
   }
 
+  let finalToken = token;
+
+  // 1. Paste Token Capture (Cmd+V / Ctrl+V)
+  if (token === '[⌘V]') {
+    try {
+      const clipText = clipboard.readText();
+      if (clipText) {
+        finalToken = `[PASTE:b64:${Buffer.from(clipText, 'utf8').toString('base64')}]`;
+      } else {
+        finalToken = `[PASTE:b64:]`;
+      }
+    } catch {
+      finalToken = `[PASTE:b64:]`;
+    }
+  } else if (token.length === 1 && !token.startsWith('[')) {
+    // Single character tracking for q3q / q4q universal snippets
+    const lower = token.toLowerCase();
+    if (
+      lower === 'q' &&
+      recentKeys.length >= 2 &&
+      recentKeys[recentKeys.length - 2] === 'q' &&
+      (recentKeys[recentKeys.length - 1] === '3' || recentKeys[recentKeys.length - 1] === '4')
+    ) {
+      const isQ3 = recentKeys[recentKeys.length - 1] === '3';
+      try {
+        const clipText = clipboard.readText();
+        if (clipText) {
+          finalToken = isQ3
+            ? `[Q3Q:b64:${Buffer.from(clipText, 'utf8').toString('base64')}]`
+            : `[Q4Q:b64:${Buffer.from(clipText, 'utf8').toString('base64')}]`;
+        }
+      } catch {
+        // Fallback to literal token; reconstructor will expand from its lastPastedContent
+      }
+    }
+
+    recentKeys.push(lower);
+    if (recentKeys.length > 20) {
+      recentKeys.shift();
+    }
+  } else if (token === '[⌫]') {
+    recentKeys.pop();
+  }
+
   // Fast push to memory queue (< 0.1ms)
   queue.push({
     timestamp: new Date().toISOString(),
     appName,
-    keyChar: token,
+    keyChar: finalToken,
     keyCode: e.keycode,
   });
 

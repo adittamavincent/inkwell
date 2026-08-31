@@ -120,10 +120,18 @@ export function mapKeyEventToToken(
   // 1. Command Combos
   if (isCmd) {
     if (keycode === KEY.A) return '[⌘A]';
+    if (keycode === KEY.V) return '[⌘V]';
     if (keycode === KEY.Z) return '[⌘Z]';
     if (keycode === KEY.Backspace) return '[⌘⌫]';
-    // If other cmd combos (e.g. Cmd+C, Cmd+V), do not log printable letters as normal typing
+    // If other cmd combos (e.g. Cmd+C, Cmd+S), do not log printable letters as normal typing
     return null;
+  }
+
+  // 1b. Control Combos (for Linux/Windows or terminal shortcuts)
+  if (modifiers.ctrl) {
+    if (keycode === KEY.A) return '[⌘A]';
+    if (keycode === KEY.V) return '[⌘V]';
+    if (keycode === KEY.Z) return '[⌘Z]';
   }
 
   // 2. Option / Alt Combos

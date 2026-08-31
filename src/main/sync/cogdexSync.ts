@@ -30,7 +30,8 @@ function stripLeadingSlash(s: string): string {
 function buildSessionBlocks(sessions: SessionPreview[]): string[] {
   return sessions.map((s) => {
     const pad = (n: number) => n.toString().padStart(2, '0');
-    const headerTime = `${pad(s.start.getHours())}:${pad(s.start.getMinutes())}`;
+    const startDate = s.start instanceof Date ? s.start : new Date(s.start);
+    const headerTime = `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
     const header = s.app ? `## ${headerTime} — ${s.app}` : `## ${headerTime}`;
     return `${header}\n\n${s.text}\n`;
   });

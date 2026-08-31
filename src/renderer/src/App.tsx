@@ -310,6 +310,15 @@ export const App: React.FC = () => {
     setLiveApp('');
   };
 
+  const handleDeleteSession = async (session: SessionPreview, index: number) => {
+    // Optimistic UI removal
+    setHistory((prev) => prev.filter((_, idx) => idx !== index));
+    // Persist deletion in SQLite
+    if (window.inkwellApi?.deleteSession) {
+      await window.inkwellApi.deleteSession(session);
+    }
+  };
+
   const handleCopyText = async (text: string) => {
     if (!window.inkwellApi) return;
     await window.inkwellApi.copyToClipboard(text);
@@ -454,6 +463,7 @@ export const App: React.FC = () => {
           sessions={history}
           appIcons={appIcons}
           onCopyText={handleCopyText}
+          onDeleteSession={handleDeleteSession}
         />
 
         {/* Overlay backdrop when settings open on compact screens */}

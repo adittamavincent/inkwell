@@ -1,4 +1,5 @@
 import React from 'react';
+import { RichContentText } from './RichContentText';
 
 interface LiveFeedProps {
   app: string;
@@ -49,7 +50,23 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({
       </div>
 
       <div className="font-mono text-xs leading-relaxed bg-ink-bg p-2.5 rounded-md border border-ink-border text-ink-text whitespace-pre-wrap break-words [overflow-wrap:anywhere] min-h-[48px] shadow-inner select-text">
-        {text || <span className="text-ink-faint font-sans text-xs">Inking in progress...</span>}
+        {text ? (
+          <>
+            <RichContentText text={text} />
+            <span
+              className="inline-block w-[1.5px] h-[13px] bg-ink-accent-light align-middle ml-0.5 animate-cursor-blink pointer-events-none rounded-full shadow-[0_0_4px_rgba(94,203,215,0.6)]"
+              aria-hidden="true"
+            />
+          </>
+        ) : (
+          <span className="text-ink-faint font-sans text-xs flex items-center gap-1">
+            <span>Inking in progress...</span>
+            <span
+              className="inline-block w-[1.5px] h-[12px] bg-ink-accent/60 align-middle ml-0.5 animate-cursor-blink pointer-events-none rounded-full"
+              aria-hidden="true"
+            />
+          </span>
+        )}
       </div>
     </div>
   );

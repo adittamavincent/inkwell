@@ -134,5 +134,7 @@ describe('groupSessions', () => {
     const sessions = groupSessions(rows, 60, 10);
     expect(sessions).toHaveLength(1);
     expect(sessions[0].text).toBe('Inkwell app');
+    expect(sessions[0].startIso).toBe('2026-08-30T10:00:00Z');
+    expect(sessions[0].endIso).toBe('2026-08-30T10:00:10Z');
   });
 });

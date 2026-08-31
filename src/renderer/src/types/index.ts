@@ -18,6 +18,8 @@ export interface CogdexSyncConfig {
 
 export interface SessionPreview {
   start: string | Date;
+  startIso?: string;
+  endIso?: string;
   app: string;
   text: string;
 }

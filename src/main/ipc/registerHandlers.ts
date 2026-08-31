@@ -15,7 +15,7 @@ import {
 } from '../capture/permissions';
 import { checkAndSyncPermissionState } from '../capture/permissionWatcher';
 import { getFrontmostAppInfo, getOrResolveAppIcon } from '../capture/activeApp';
-import { loadAllHistory, clearHistory } from '../db/repository';
+import { loadAllHistory, clearHistory, deleteSessionEntry } from '../db/repository';
 import { getConfig, saveConfig, CogdexSyncConfig } from '../config/store';
 import { doSync } from '../sync/cogdexSync';
 import { updateTrayMenu } from '../tray/trayManager';
@@ -84,6 +84,17 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   ipcMain.handle('inkwell:clearHistory', () => {
     clearHistory();
   });
+
+  ipcMain.handle(
+    'inkwell:deleteSession',
+    (_event, session: { startIso?: string; endIso?: string; app?: string; start?: any }) => {
+      const startIso =
+        session.startIso ||
+        (session.start instanceof Date ? session.start.toISOString() : String(session.start || ''));
+      const endIso = session.endIso || startIso;
+      deleteSessionEntry(startIso, endIso, session.app);
+    }
+  );
 
   ipcMain.handle('inkwell:copyToClipboard', (_event, text: string) => {
     clipboard.writeText(text);

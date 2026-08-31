@@ -102,6 +102,9 @@ export const api = {
   clearHistory: (): Promise<void> => {
     return ipcRenderer.invoke('inkwell:clearHistory');
   },
+  deleteSession: (session: SessionPreview): Promise<void> => {
+    return ipcRenderer.invoke('inkwell:deleteSession', session);
+  },
   copyToClipboard: (text: string): Promise<void> => {
     return ipcRenderer.invoke('inkwell:copyToClipboard', text);
   },

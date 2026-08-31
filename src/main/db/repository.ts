@@ -56,6 +56,23 @@ export function loadAllHistory(idleTimeoutSecs = 60, appSwitchGraceSecs = 10): S
   return groupSessions(decryptedRows, idleTimeoutSecs, appSwitchGraceSecs).reverse();
 }
 
+export function deleteSessionEntry(startIso: string, endIso?: string, appName?: string): void {
+  const db = getDatabase();
+  if (startIso && endIso && appName) {
+    db.prepare('DELETE FROM keystrokes WHERE timestamp >= ? AND timestamp <= ? AND app_name = ?')
+      .run(startIso, endIso, appName);
+  } else if (startIso && endIso) {
+    db.prepare('DELETE FROM keystrokes WHERE timestamp >= ? AND timestamp <= ?')
+      .run(startIso, endIso);
+  } else if (startIso && appName) {
+    db.prepare('DELETE FROM keystrokes WHERE timestamp = ? AND app_name = ?')
+      .run(startIso, appName);
+  } else if (startIso) {
+    db.prepare('DELETE FROM keystrokes WHERE timestamp = ?')
+      .run(startIso);
+  }
+}
+
 export function clearHistory(): void {
   const db = getDatabase();
   db.prepare('DELETE FROM keystrokes').run();

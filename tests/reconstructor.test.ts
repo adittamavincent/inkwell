@@ -62,8 +62,44 @@ describe('reconstructText', () => {
     expect(reconstructText(tokens)).toBe('abcd');
   });
 
+  it('handles paste tokens [PASTE:b64:...]', () => {
+    const pasted = 'const x = 42;';
+    const b64 = Buffer.from(pasted).toString('base64');
+    const tokens = ['l', 'e', 't', ' ', '[PASTE:b64:' + b64 + ']', ' ', 'y'];
+    expect(reconstructText(tokens)).toBe('let const x = 42; y');
+  });
+
+  it('handles universal q3q snippet expansion wrapping previous paste with 3 backticks', () => {
+    const pasted = 'console.log("hello");';
+    const b64 = Buffer.from(pasted).toString('base64');
+    const tokens = ['[PASTE:b64:' + b64 + ']', '[↵]', 'q', '3', 'q', 'm', 'o', 'r', 'e'];
+    expect(reconstructText(tokens)).toBe(
+      `console.log("hello");\n\`\`\`\nconsole.log("hello");\n\`\`\`\nmore`
+    );
+  });
+
+  it('handles universal q4q snippet expansion wrapping previous paste with 4 backticks', () => {
+    const pasted = '<div>Hello</div>';
+    const b64 = Buffer.from(pasted).toString('base64');
+    const tokens = ['[PASTE:b64:' + b64 + ']', '[↵]', 'q', '4', 'q'];
+    expect(reconstructText(tokens)).toBe(
+      `<div>Hello</div>\n\`\`\`\`\n<div>Hello</div>\n\`\`\`\`\n`
+    );
+  });
+
+  it('handles explicit [Q3Q:b64:...] and [Q4Q:b64:...] tokens with backticks', () => {
+    const code = 'SELECT * FROM users;';
+    const b64 = Buffer.from(code).toString('base64');
+    const tokens = ['[Q3Q:b64:' + b64 + ']'];
+    expect(reconstructText(tokens)).toBe(`\`\`\`\nSELECT * FROM users;\n\`\`\`\n`);
+
+    const tokens4 = ['[Q4Q:b64:' + b64 + ']'];
+    expect(reconstructText(tokens4)).toBe(`\`\`\`\`\nSELECT * FROM users;\n\`\`\`\`\n`);
+  });
+
   it('ignores unknown bracketed tokens gracefully', () => {
     const tokens = ['a', '[F1]', '[UnknownToken]', 'b'];
     expect(reconstructText(tokens)).toBe('ab');
   });
 });
+
