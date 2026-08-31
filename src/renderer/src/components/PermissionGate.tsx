@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import {
   ShieldAlert,
-  ExternalLink,
   Loader2,
   CheckCircle2,
-  KeyRound,
   Lock,
   Check,
   AlertCircle,
   Terminal,
+  Feather,
 } from 'lucide-react';
 import { AuthStatus } from '../types';
 
@@ -69,168 +68,184 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-ink-bg text-ink-text flex flex-col items-center justify-center p-6 select-none overflow-y-auto">
-      <div className="max-w-md w-full flex flex-col items-center text-center space-y-6">
-        {/* Brand Icon Badge */}
-        <div className="relative">
-          <div className="w-16 h-16 rounded-2xl bg-ink-card border border-ink-border flex items-center justify-center shadow-xl shadow-ink-accent/5">
+      {/* Background ink ambience */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#163b54]/25 via-ink-bg to-ink-sidebar pointer-events-none" />
+
+      <div className="relative max-w-lg w-full flex flex-col items-stretch space-y-6">
+        {/* Editorial Brand Header */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#163b54] to-[#1f6f78] border border-ink-accent/40 text-ink-accent-light shadow-lg shadow-black/40 mb-1">
             {allSet ? (
-              <CheckCircle2 className="w-8 h-8 text-emerald-400 animate-in zoom-in-50 duration-300" />
+              <CheckCircle2 className="w-6 h-6 text-emerald-300" />
             ) : (
-              <KeyRound className="w-8 h-8 text-ink-accent" />
+              <Feather className="w-6 h-6 text-ink-accent-light" />
             )}
           </div>
-          {allSet && (
-            <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
-            </span>
-          )}
+
+          <div className="space-y-1">
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink-text">
+              {allSet ? 'Inkwell Initialized' : 'Authorize Keystroke Stream'}
+            </h1>
+            <p className="text-xs text-ink-muted leading-relaxed max-w-sm mx-auto">
+              {allSet
+                ? 'System authorization granted. Launching the live manuscript desk...'
+                : 'Inkwell requires macOS system permissions to passively record keystrokes and correlate them with active windows.'}
+            </p>
+          </div>
         </div>
 
-        {/* Title & Description */}
-        <div className="space-y-2">
-          <h1 className="text-xl font-bold tracking-tight text-ink-text">
-            {allSet ? "You're All Set!" : 'Enable Keystroke Capture'}
-          </h1>
-          <p className="text-xs text-ink-muted leading-relaxed max-w-sm">
-            {allSet
-              ? 'Permissions verified! Launching Inkwell workspace...'
-              : 'macOS requires two native permissions to detect active apps and capture keystrokes globally.'}
-          </p>
-        </div>
-
-        {/* Dev Mode Notification */}
+        {/* Dev Mode Callout */}
         {import.meta.env.DEV && (
-          <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-left text-[11px] text-blue-300 flex items-start gap-2.5 shadow-sm">
-            <Terminal className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="font-semibold block text-blue-200">Dev Mode Active</span>
-              <p className="leading-tight text-blue-300/90">
-                Running in dev mode — permissions are separate from the packaged app. Grant access to the <strong className="text-blue-100 font-semibold">'Electron'</strong> entry in System Settings, not 'Inkwell'.
+          <div className="bg-ink-panel border border-ink-accent/30 rounded-lg p-3 text-left text-xs flex items-start gap-3 shadow-sm">
+            <Terminal className="w-4 h-4 text-ink-accent-light shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-mono text-[11px] font-semibold text-ink-accent-light block">
+                Development Build Active
+              </span>
+              <p className="text-[11px] text-ink-muted leading-relaxed">
+                macOS attributes permissions to the <strong className="text-ink-text font-semibold">'Electron'</strong> app binary in System Settings during local development.
               </p>
             </div>
           </div>
         )}
 
-        {/* Permission Checklist */}
+        {/* Dual Permission Ledger */}
         {!allSet && (
-          <div className="w-full bg-ink-card/60 border border-ink-border rounded-xl p-4 text-left space-y-3.5 shadow-sm">
-            <div className="text-xs font-semibold text-ink-text flex items-center gap-1.5 mb-1">
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-              <span>Required macOS Permissions:</span>
+          <div className="bg-ink-panel/90 border border-ink-border rounded-xl p-4 text-left space-y-3 divide-y divide-ink-border-subtle shadow-md">
+            <div className="flex items-center justify-between pb-1">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-muted font-semibold flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-ink-accent" />
+                Required macOS Clearances
+              </span>
+              <span className="text-[11px] font-mono text-ink-faint">
+                {[isAccAuthorized, isInputAuthorized].filter(Boolean).length}/2 Granted
+              </span>
             </div>
 
             {/* 1. Accessibility */}
-            <div className="p-3 rounded-lg bg-ink-panel border border-ink-border flex items-center justify-between">
-              <div className="space-y-0.5 pr-2">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-ink-text">
+            <div className="pt-3 flex items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
                   {isAccAuthorized ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                   ) : accessibility === 'denied' || accessibility === 'restricted' ? (
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-ink-danger shrink-0" />
                   ) : (
                     <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                   )}
-                  <span>1. Accessibility</span>
+                  <span className="text-xs font-semibold text-ink-text font-sans">
+                    1. Accessibility
+                  </span>
                 </div>
-                <p className="text-[11px] text-ink-muted leading-tight">
+                <p className="text-[11px] text-ink-muted leading-normal pl-6">
                   {isAccAuthorized
-                    ? 'Authorized: Global event tap enabled'
+                    ? 'Authorized · System event tap active'
                     : accessibility === 'denied' || accessibility === 'restricted'
-                    ? 'Denied: Enable in System Settings'
-                    : 'Required to register global keystroke tap'}
+                    ? 'Denied · Enable in Privacy & Security settings'
+                    : 'Needed to detect active window titles and global events'}
                 </p>
               </div>
 
-              {isAccAuthorized ? (
-                <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Granted
-                </span>
-              ) : (
-                <button
-                  onClick={handleAccessibility}
-                  disabled={isRequestingAcc}
-                  className="px-2.5 py-1 text-xs font-medium rounded-md bg-ink-accent hover:bg-ink-accent-hover text-white flex items-center gap-1 shrink-0 transition-colors shadow-xs"
-                >
-                  {isRequestingAcc ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <>
-                      <span>{accessibility === 'denied' || accessibility === 'restricted' ? 'Settings' : 'Grant'}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </>
-                  )}
-                </button>
-              )}
+              <div className="shrink-0">
+                {isAccAuthorized ? (
+                  <span className="px-2 py-0.5 font-mono text-[10px] font-medium rounded bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                    Active
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleAccessibility}
+                    disabled={isRequestingAcc}
+                    className="px-3 py-1.5 text-xs font-medium rounded bg-ink-accent hover:bg-ink-accent-hover text-white flex items-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    {isRequestingAcc ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <span>
+                        {accessibility === 'denied' || accessibility === 'restricted'
+                          ? 'Open Settings'
+                          : 'Authorize'}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 2. Input Monitoring */}
-            <div className="p-3 rounded-lg bg-ink-panel border border-ink-border flex items-center justify-between">
-              <div className="space-y-0.5 pr-2">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-ink-text">
+            <div className="pt-3 flex items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
                   {isInputAuthorized ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                   ) : inputMonitoring === 'denied' || inputMonitoring === 'restricted' ? (
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-ink-danger shrink-0" />
                   ) : (
                     <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                   )}
-                  <span>2. Input Monitoring</span>
+                  <span className="text-xs font-semibold text-ink-text font-sans">
+                    2. Input Monitoring
+                  </span>
                 </div>
-                <p className="text-[11px] text-ink-muted leading-tight">
+                <p className="text-[11px] text-ink-muted leading-normal pl-6">
                   {isInputAuthorized
-                    ? 'Authorized: System input stream active'
+                    ? 'Authorized · Global keystroke tap connected'
                     : inputMonitoring === 'denied' || inputMonitoring === 'restricted'
-                    ? 'Denied: Enable in System Settings'
-                    : 'Required for global keystroke listening'}
+                    ? 'Denied · Enable in Privacy & Security settings'
+                    : 'Needed to stream keystrokes across external applications'}
                 </p>
               </div>
 
-              {isInputAuthorized ? (
-                <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Granted
-                </span>
-              ) : (
-                <button
-                  onClick={handleInputMonitoring}
-                  disabled={isRequestingInp}
-                  className="px-2.5 py-1 text-xs font-medium rounded-md bg-ink-card hover:bg-ink-hover border border-ink-border text-ink-text flex items-center gap-1 shrink-0 transition-colors"
-                >
-                  {isRequestingInp ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <>
-                      <span>{inputMonitoring === 'denied' || inputMonitoring === 'restricted' ? 'Settings' : 'Grant'}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </>
-                  )}
-                </button>
-              )}
+              <div className="shrink-0">
+                {isInputAuthorized ? (
+                  <span className="px-2 py-0.5 font-mono text-[10px] font-medium rounded bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                    Active
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleInputMonitoring}
+                    disabled={isRequestingInp}
+                    className="px-3 py-1.5 text-xs font-medium rounded bg-ink-card hover:bg-ink-hover border border-ink-border text-ink-text flex items-center gap-1.5 transition-colors"
+                  >
+                    {isRequestingInp ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <span>
+                        {inputMonitoring === 'denied' || inputMonitoring === 'restricted'
+                          ? 'Open Settings'
+                          : 'Authorize'}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Action Button & Status */}
-        <div className="w-full space-y-3 pt-2">
+        {/* Bottom State Bar */}
+        <div className="space-y-3">
           {allSet ? (
-            <div className="py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center justify-center gap-2 text-xs font-medium animate-pulse">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Starting capture engine...</span>
+            <div className="py-2.5 px-4 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 flex items-center justify-center gap-2 text-xs font-mono">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Permissions verified · Starting engine</span>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-ink-panel border border-ink-border text-xs text-ink-muted">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-ink-accent shrink-0" />
-              <span>Waiting for permissions in System Settings... updates live</span>
+            <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-ink-panel/60 border border-ink-border-subtle text-xs font-mono text-ink-muted">
+              <span className="w-2 h-2 rounded-full bg-ink-accent animate-pulse shrink-0" />
+              <span>Awaiting System Settings update...</span>
             </div>
           )}
-        </div>
 
-        {/* Privacy Footer Guarantee */}
-        <div className="flex items-center justify-center gap-1.5 text-[11px] text-ink-muted/70 pt-4 border-t border-ink-border/50 w-full">
-          <Lock className="w-3 h-3" />
-          <span>Local-first & AES-256 encrypted. Data never leaves your Mac.</span>
+          {/* Privacy Guarantee Seal */}
+          <div className="flex items-center justify-center gap-2 text-[11px] text-ink-faint pt-2 border-t border-ink-border-subtle">
+            <Lock className="w-3 h-3 text-ink-muted/80" />
+            <span className="font-mono text-[10px]">
+              Local-first · AES-256 encrypted · Zero external telemetry
+            </span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+

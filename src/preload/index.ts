@@ -16,6 +16,11 @@ export interface SyncResponse {
   message: string;
 }
 
+export interface ActiveAppInfo {
+  name: string;
+  icon: string | null;
+}
+
 export const api = {
   // Keystroke Stream Listener
   onKeystroke: (callback: (payload: KeystrokePayload) => void) => {
@@ -27,15 +32,18 @@ export const api = {
   },
 
   // Active App Listener & Getter
-  onActiveAppChanged: (callback: (appName: string) => void) => {
-    const handler = (_event: any, appName: string) => callback(appName);
+  onActiveAppChanged: (callback: (appInfo: ActiveAppInfo | string) => void) => {
+    const handler = (_event: any, appInfo: ActiveAppInfo | string) => callback(appInfo);
     ipcRenderer.on('inkwell:activeAppChanged', handler);
     return () => {
       ipcRenderer.removeListener('inkwell:activeAppChanged', handler);
     };
   },
-  getActiveApp: (): Promise<string> => {
+  getActiveApp: (): Promise<ActiveAppInfo | string> => {
     return ipcRenderer.invoke('inkwell:getActiveApp');
+  },
+  getAppIcon: (appName: string): Promise<string | null> => {
+    return ipcRenderer.invoke('inkwell:getAppIcon', appName);
   },
 
   // Capture Controls

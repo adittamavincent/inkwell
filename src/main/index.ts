@@ -51,7 +51,7 @@ function createWindow(): void {
     minWidth: 760,
     minHeight: 520,
     title: 'Inkwell',
-    backgroundColor: '#1b1b1f',
+    backgroundColor: '#0d1317',
     titleBarStyle: 'hiddenInset',
     vibrancy: 'under-window',
     visualEffectState: 'active',
@@ -89,11 +89,11 @@ app.whenReady().then(() => {
   // 2. Register IPC bridge
   registerIpcHandlers(() => mainWindow);
 
-  // 4. Create window & Tray
+  // 3. Create window & Tray
   createWindow();
   setupTray(mainWindow);
 
-  // 5. Start continuous background permission watcher (initial sync + polling)
+  // 4. Start continuous background permission watcher (initial sync + polling)
   startPermissionWatcher((_status) => {
     updateTrayMenu(mainWindow);
   }, 2000);

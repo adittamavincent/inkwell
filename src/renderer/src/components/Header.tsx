@@ -1,18 +1,10 @@
 import React from 'react';
-import {
-  Play,
-  Pause,
-  Trash2,
-  Copy,
-  SlidersHorizontal,
-  Feather,
-  Check,
-  AppWindow,
-} from 'lucide-react';
+import { Feather } from 'lucide-react';
 
 interface HeaderProps {
   isRunning: boolean;
   detectedApp?: string;
+  detectedAppIcon?: string | null;
   onToggleCapture: () => void;
   onClear: () => void;
   onCopyAll: () => void;
@@ -25,6 +17,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   isRunning,
   detectedApp,
+  detectedAppIcon,
   onToggleCapture,
   onClear,
   onCopyAll,
@@ -34,64 +27,69 @@ export const Header: React.FC<HeaderProps> = ({
   sessionCount,
 }) => {
   return (
-    <header className="titlebar-drag-region h-14 bg-ink-sidebar border-b border-ink-border flex items-center justify-between px-4 pl-20 select-none">
-      {/* Left: Branding & Capture Status Badge */}
-      <div className="flex items-center gap-3 titlebar-no-drag">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-ink-accent/20 border border-ink-accent/40 flex items-center justify-center text-ink-accent">
-            <Feather className="w-4 h-4" />
+    <header className="titlebar-drag-region h-13 bg-ink-sidebar/95 border-b border-ink-border flex items-center justify-between px-4 pl-20 select-none backdrop-blur-md">
+      {/* Left: Branding & Capture State */}
+      <div className="flex items-center gap-3.5 titlebar-no-drag">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#163b54] to-[#1f6f78] border border-ink-accent/40 flex items-center justify-center text-ink-text shadow-sm shadow-black/40">
+            <Feather className="w-3 h-3 text-ink-accent-light" />
           </div>
-          <span className="font-semibold text-sm tracking-wide text-ink-text">Inkwell</span>
+          <span className="font-serif text-[15px] font-semibold tracking-tight text-ink-text">
+            Inkwell
+          </span>
           {import.meta.env.DEV && (
             <span
-              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30"
-              title="Running in dev mode — permissions are separate from the packaged app (assigned to 'Electron' in macOS settings)."
+              className="text-[9px] font-mono font-medium tracking-wider px-1.5 py-0.5 rounded bg-ink-accent-muted/40 text-ink-accent-light border border-ink-accent/30"
+              title="Running in dev mode — permissions assigned to 'Electron' in macOS settings."
             >
               DEV
             </span>
           )}
         </div>
 
-        <div className="h-4 w-px bg-ink-border mx-1" />
+        <div className="h-3.5 w-px bg-ink-border/80 mx-0.5" />
 
-        {/* Running Status Badge */}
+        {/* Capture State Trigger */}
         <button
           onClick={onToggleCapture}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
             isRunning
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-              : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/40 hover:border-emerald-700/50'
+              : 'bg-amber-950/40 text-amber-300 border-amber-800/40 hover:bg-amber-900/40 hover:border-amber-700/50'
           }`}
-          title={isRunning ? 'Click to pause capture' : 'Click to resume capture'}
+          title={isRunning ? 'Pause global keystroke capture' : 'Resume keystroke capture'}
         >
           <span
-            className={`w-2 h-2 rounded-full ${
-              isRunning ? 'bg-emerald-400 animate-pulse-subtle' : 'bg-amber-400'
+            className={`w-1.5 h-1.5 rounded-full ${
+              isRunning ? 'bg-emerald-400' : 'bg-amber-400'
             }`}
           />
-          <span>{isRunning ? 'Capturing' : 'Paused'}</span>
-          {isRunning ? (
-            <Pause className="w-3 h-3 ml-0.5 opacity-60" />
-          ) : (
-            <Play className="w-3 h-3 ml-0.5 opacity-60" />
-          )}
+          <span className="text-[11px] tracking-wide uppercase font-mono">
+            {isRunning ? 'Logging' : 'Paused'}
+          </span>
         </button>
 
-        {/* Persistent Frontmost App Indicator Badge */}
+        {/* Active Application Tag */}
         {detectedApp && (
           <div
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-ink-card border border-ink-border text-xs text-ink-muted"
-            title={`Current frontmost app: ${detectedApp}`}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-ink-panel border border-ink-border text-xs text-ink-muted"
+            title={`Active frontmost app: ${detectedApp}`}
           >
-            <AppWindow className="w-3 h-3 text-ink-muted/80" />
-            <span className="text-ink-text font-medium truncate max-w-[120px] sm:max-w-[160px]">
+            {detectedAppIcon && (
+              <img
+                src={detectedAppIcon}
+                alt=""
+                className="w-4 h-4 rounded-sm shrink-0 object-contain"
+              />
+            )}
+            <span className="text-ink-text font-mono text-[11px] truncate max-w-[130px] sm:max-w-[170px]">
               {detectedApp}
             </span>
           </div>
         )}
 
-        <span className="text-xs text-ink-muted hidden lg:inline">
-          {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+        <span className="text-xs font-mono text-ink-faint hidden lg:inline">
+          {sessionCount} {sessionCount === 1 ? 'entry' : 'entries'}
         </span>
       </div>
 
@@ -99,44 +97,37 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2 titlebar-no-drag">
         <button
           onClick={onCopyAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-ink-panel hover:bg-ink-hover border border-ink-border text-ink-text transition-colors"
-          title="Copy all preview text"
+          className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-ink-panel hover:bg-ink-hover border border-ink-border text-ink-text transition-colors"
+          title="Copy formatted preview to clipboard"
         >
           {isCopied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Copied!</span>
-            </>
+            <span className="text-emerald-400 font-mono text-[11px]">Copied</span>
           ) : (
-            <>
-              <Copy className="w-3.5 h-3.5 text-ink-muted" />
-              <span>Copy Preview</span>
-            </>
+            <span>Copy Buffer</span>
           )}
         </button>
 
         <button
           onClick={onClear}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-ink-panel hover:bg-ink-danger/20 border border-ink-border hover:border-ink-danger/40 text-ink-muted hover:text-ink-danger transition-colors"
+          className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-ink-panel hover:bg-ink-danger-muted border border-ink-border hover:border-ink-danger/50 text-ink-muted hover:text-ink-danger transition-colors"
           title="Clear all stored keystrokes"
         >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Clear</span>
+          <span>Clear</span>
         </button>
 
         <button
           onClick={onToggleSettings}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+          className={`px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${
             isSettingsOpen
-              ? 'bg-ink-accent text-white border-ink-accent'
+              ? 'bg-ink-accent text-white border-ink-accent shadow-sm'
               : 'bg-ink-panel hover:bg-ink-hover border border-ink-border text-ink-text'
           }`}
-          title="Toggle Cogdex Sync Settings"
+          title="Toggle Vault Sync Settings"
         >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          <span>Sync Settings</span>
+          <span>Vault Sync</span>
         </button>
       </div>
     </header>
   );
 };
+

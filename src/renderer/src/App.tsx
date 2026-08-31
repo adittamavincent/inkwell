@@ -26,10 +26,39 @@ export const App: React.FC = () => {
   const [permissions, setPermissions] = useState<PermissionStatus | null>(null);
   const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null);
   const [detectedApp, setDetectedApp] = useState<string>('');
+  const [detectedAppIcon, setDetectedAppIcon] = useState<string | null>(null);
+  const [appIcons, setAppIcons] = useState<Record<string, string | null>>({});
   const [config, setConfig] = useState<CogdexSyncConfig>(DEFAULT_CONFIG);
   const [history, setHistory] = useState<SessionPreview[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+
+  const fetchIcon = useCallback((appName: string) => {
+    if (!appName || appName === 'Unknown') return;
+    setAppIcons((prev) => {
+      if (prev[appName] !== undefined) return prev;
+      window.inkwellApi?.getAppIcon?.(appName).then((icon) => {
+        if (icon) {
+          setAppIcons((current) => ({ ...current, [appName]: icon }));
+        }
+      });
+      return { ...prev, [appName]: null };
+    });
+  }, []);
+
+  const handleActiveAppInfo = useCallback((data: any) => {
+    const name = typeof data === 'string' ? data : data?.name || '';
+    const icon = typeof data === 'object' ? data?.icon || null : null;
+    setDetectedApp(name);
+    setDetectedAppIcon(icon);
+    if (name) {
+      if (icon) {
+        setAppIcons((prev) => ({ ...prev, [name]: icon }));
+      } else {
+        fetchIcon(name);
+      }
+    }
+  }, [fetchIcon]);
 
   // In-progress live typing session (React state for UI render)
   const [liveTokens, setLiveTokens] = useState<string[]>([]);
@@ -104,7 +133,7 @@ export const App: React.FC = () => {
     window.inkwellApi.getHistory().then(setHistory);
 
     // Initial frontmost app
-    window.inkwellApi.getActiveApp?.().then(setDetectedApp);
+    window.inkwellApi.getActiveApp?.().then(handleActiveAppInfo);
 
     // Initial non-prompting permission status check
     window.inkwellApi.checkPermissions().then((status) => {
@@ -115,9 +144,7 @@ export const App: React.FC = () => {
     });
 
     // Active App Changed Listener
-    const unsubscribeActiveApp = window.inkwellApi.onActiveAppChanged?.((appName: string) => {
-      setDetectedApp(appName);
-    });
+    const unsubscribeActiveApp = window.inkwellApi.onActiveAppChanged?.(handleActiveAppInfo);
 
     // Keystroke Stream Listener
     const unsubscribeKeystroke = window.inkwellApi.onKeystroke((payload: KeystrokePayload) => {
@@ -346,8 +373,23 @@ export const App: React.FC = () => {
     await window.inkwellApi.openInputMonitoringSettings();
   };
 
+  // Fetch missing icons for apps present in history or live session
+  useEffect(() => {
+    for (const item of history) {
+      if (item.app) fetchIcon(item.app);
+    }
+    if (liveApp) fetchIcon(liveApp);
+  }, [history, liveApp, fetchIcon]);
+
   // Loading state before initial check resolves (prevents flash of gate)
   if (isOnboarded === null || !permissions) {
+    if (typeof window !== 'undefined' && !window.inkwellApi) {
+      return (
+        <div className="h-screen w-screen bg-ink-bg text-ink-text flex items-center justify-center font-mono text-xs text-ink-muted select-none">
+          <span>Inkwell API initializing...</span>
+        </div>
+      );
+    }
     return <div className="h-screen w-screen bg-ink-bg" />;
   }
 
@@ -380,6 +422,7 @@ export const App: React.FC = () => {
       <Header
         isRunning={isRunning}
         detectedApp={detectedApp}
+        detectedAppIcon={detectedAppIcon}
         onToggleCapture={handleToggleCapture}
         onClear={handleClearHistory}
         onCopyAll={handleCopyAll}
@@ -402,19 +445,21 @@ export const App: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <LiveFeed
           app={liveApp}
+          appIcon={(liveApp && appIcons[liveApp]) || detectedAppIcon}
           text={liveText}
           keystrokeCount={liveTokens.length}
         />
 
         <SessionHistory
           sessions={history}
+          appIcons={appIcons}
           onCopyText={handleCopyText}
         />
 
         {/* Overlay backdrop when settings open on compact screens */}
         {isSettingsOpen && (
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs z-20 md:hidden"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-20 md:hidden"
             onClick={() => setIsSettingsOpen(false)}
           />
         )}
@@ -430,3 +475,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
+

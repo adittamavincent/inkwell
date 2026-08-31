@@ -32,3 +32,9 @@ export interface SyncResponse {
   success: boolean;
   message: string;
 }
+
+export interface ActiveAppInfo {
+  name: string;
+  icon: string | null;
+}
+

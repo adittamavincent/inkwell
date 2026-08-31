@@ -14,7 +14,7 @@ import {
   PermissionStatus,
 } from '../capture/permissions';
 import { checkAndSyncPermissionState } from '../capture/permissionWatcher';
-import { getFrontmostAppName } from '../capture/activeApp';
+import { getFrontmostAppInfo, getOrResolveAppIcon } from '../capture/activeApp';
 import { loadAllHistory, clearHistory } from '../db/repository';
 import { getConfig, saveConfig, CogdexSyncConfig } from '../config/store';
 import { doSync } from '../sync/cogdexSync';
@@ -26,7 +26,11 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   });
 
   ipcMain.handle('inkwell:getActiveApp', () => {
-    return getFrontmostAppName();
+    return getFrontmostAppInfo();
+  });
+
+  ipcMain.handle('inkwell:getAppIcon', async (_event, appName: string) => {
+    return getOrResolveAppIcon(appName);
   });
 
   ipcMain.handle('inkwell:toggleCapture', (_event, start: boolean) => {
