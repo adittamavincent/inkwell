@@ -442,7 +442,7 @@ export const App: React.FC = () => {
         onOpenInputMonitoringSettings={handleOpenInputMonitoringSettings}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative min-w-0 w-full">
         <LiveFeed
           app={liveApp}
           appIcon={(liveApp && appIcons[liveApp]) || detectedAppIcon}

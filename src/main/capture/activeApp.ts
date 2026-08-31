@@ -144,7 +144,46 @@ function icnsToDataUrl(icnsPath: string): string | null {
   return null;
 }
 
+function findInkwellIconPath(): string | null {
+  try {
+    const appRoot = app.getAppPath();
+    const candidates = [
+      path.join(appRoot, 'icons/icon.icns'),
+      path.join(appRoot, '../icons/icon.icns'),
+      path.join(appRoot, '../../icons/icon.icns'),
+      path.join(process.cwd(), 'icons/icon.icns'),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
 export async function fetchAppIcon(ownerPath?: string, appName?: string): Promise<string | null> {
+  const cleanName = (appName || '').trim();
+  const isInkwell =
+    cleanName.toLowerCase() === 'inkwell' ||
+    cleanName.toLowerCase() === 'electron' ||
+    (ownerPath && (ownerPath.includes('Electron.app') || ownerPath.includes('Inkwell.app')));
+
+  if (isInkwell) {
+    if (iconCache.has('Inkwell')) {
+      return iconCache.get('Inkwell') ?? null;
+    }
+    const inkwellIconPath = findInkwellIconPath();
+    if (inkwellIconPath) {
+      const dataUrl = icnsToDataUrl(inkwellIconPath);
+      if (dataUrl) {
+        iconCache.set('Inkwell', dataUrl);
+        iconCache.set('Electron', dataUrl);
+        return dataUrl;
+      }
+    }
+  }
+
   // ownerPath takes priority as cache key when available (most precise)
   const cacheKey = (appName || ownerPath || '').trim();
   if (cacheKey && iconCache.has(cacheKey)) {
@@ -219,8 +258,19 @@ async function refreshActiveApp(): Promise<void> {
       screenRecordingPermission: false,
     });
     if (result && result.owner && result.owner.name) {
-      const newName = result.owner.name.trim() || 'Unknown';
+      let newName = result.owner.name.trim() || 'Unknown';
       const ownerPath = result.owner.path;
+
+      const isCurrentApp =
+        newName.toLowerCase() === 'electron' ||
+        (result.owner as any).bundleId === 'com.github.Electron' ||
+        result.owner.processId === process.pid ||
+        (ownerPath && ownerPath.includes('Electron.app'));
+
+      if (isCurrentApp) {
+        newName = 'Inkwell';
+      }
+
       const icon = await fetchAppIcon(ownerPath, newName);
 
       if (newName !== cachedAppName || icon !== cachedAppIcon) {

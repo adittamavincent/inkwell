@@ -1,6 +1,7 @@
 import React from 'react';
-import { ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, ExternalLink, KeyRound } from 'lucide-react';
 import { AuthStatus } from '../types';
+import { IconButton } from './IconButton';
 
 interface PermissionBannerProps {
   accessibility: AuthStatus;
@@ -36,23 +37,23 @@ export const PermissionBanner: React.FC<PermissionBannerProps> = ({
             <strong className="font-semibold text-amber-100">Accessibility Required:</strong> Inkwell cannot detect active applications until granted in System Settings.
           </span>
         </div>
-        <div className="flex items-center gap-2 ml-4 shrink-0">
+        <div className="flex items-center gap-1.5 ml-4 shrink-0">
           {!isDenied && (
-            <button
-              onClick={onRequestAccessibility}
-              className="px-2.5 py-1 rounded bg-amber-900/40 hover:bg-amber-800/50 border border-amber-700/50 text-amber-200 font-medium transition-colors text-xs"
+            <IconButton
+              icon={KeyRound}
               title="Prompt macOS permission request"
-            >
-              <span>Prompt</span>
-            </button>
+              variant="warning"
+              size="sm"
+              onClick={onRequestAccessibility}
+            />
           )}
-          <button
-            onClick={onOpenAccessibilitySettings}
-            className="px-2.5 py-1 rounded bg-amber-900/60 hover:bg-amber-800/70 border border-amber-600/50 text-amber-100 font-medium transition-colors text-xs"
+          <IconButton
+            icon={ExternalLink}
             title="Open macOS Privacy & Security -> Accessibility"
-          >
-            <span>Open Settings</span>
-          </button>
+            variant="warning"
+            size="sm"
+            onClick={onOpenAccessibilitySettings}
+          />
         </div>
       </div>
     );
@@ -68,26 +69,24 @@ export const PermissionBanner: React.FC<PermissionBannerProps> = ({
           <strong className="font-semibold text-amber-100">Input Monitoring Required:</strong> Accessibility is active, but Input Monitoring must be authorized to record strokes.
         </span>
       </div>
-      <div className="flex items-center gap-2 ml-4 shrink-0">
+      <div className="flex items-center gap-1.5 ml-4 shrink-0">
         {!isInputDenied && (
-          <button
-            onClick={onRequestInputMonitoring}
-            className="px-2.5 py-1 rounded bg-amber-900/40 hover:bg-amber-800/50 border border-amber-700/50 text-amber-200 font-medium transition-colors text-xs"
+          <IconButton
+            icon={KeyRound}
             title="Prompt macOS permission request"
-          >
-            <span>Prompt</span>
-          </button>
+            variant="warning"
+            size="sm"
+            onClick={onRequestInputMonitoring}
+          />
         )}
-        <button
-          onClick={onOpenInputMonitoringSettings}
-          className="px-2.5 py-1 rounded bg-amber-900/60 hover:bg-amber-800/70 border border-amber-600/50 text-amber-100 font-medium transition-colors text-xs"
+        <IconButton
+          icon={ExternalLink}
           title="Open macOS Privacy & Security -> Input Monitoring"
-        >
-          <span>Open Settings</span>
-        </button>
+          variant="warning"
+          size="sm"
+          onClick={onOpenInputMonitoringSettings}
+        />
       </div>
     </div>
   );
 };
-
-

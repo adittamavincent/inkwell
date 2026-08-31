@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.setName('Inkwell');
 import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { startPermissionWatcher, stopPermissionWatcher } from './capture/permissionWatcher';

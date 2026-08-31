@@ -74,7 +74,7 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
       <div className="relative max-w-lg w-full flex flex-col items-stretch space-y-6">
         {/* Editorial Brand Header */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#163b54] to-[#1f6f78] border border-ink-accent/40 text-ink-accent-light shadow-lg shadow-black/40 mb-1">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#163b54] to-[#1f6f78] text-ink-accent-light shadow-lg shadow-black/40 mb-1">
             {allSet ? (
               <CheckCircle2 className="w-6 h-6 text-emerald-300" />
             ) : (
@@ -83,7 +83,7 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
           </div>
 
           <div className="space-y-1">
-            <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink-text">
+            <h1 className="font-serif text-2xl font-semibold text-ink-text">
               {allSet ? 'Inkwell Initialized' : 'Authorize Keystroke Stream'}
             </h1>
             <p className="text-xs text-ink-muted leading-relaxed max-w-sm mx-auto">
@@ -96,13 +96,13 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
 
         {/* Dev Mode Callout */}
         {import.meta.env.DEV && (
-          <div className="bg-ink-panel border border-ink-accent/30 rounded-lg p-3 text-left text-xs flex items-start gap-3 shadow-sm">
+          <div className="bg-ink-panel rounded-lg p-3 text-left text-xs flex items-start gap-3 shadow-sm">
             <Terminal className="w-4 h-4 text-ink-accent-light shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <span className="font-mono text-[11px] font-semibold text-ink-accent-light block">
+              <span className="text-xs font-semibold text-ink-accent-light block">
                 Development Build Active
               </span>
-              <p className="text-[11px] text-ink-muted leading-relaxed">
+              <p className="text-xs text-ink-muted leading-relaxed">
                 macOS attributes permissions to the <strong className="text-ink-text font-semibold">'Electron'</strong> app binary in System Settings during local development.
               </p>
             </div>
@@ -111,13 +111,13 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
 
         {/* Dual Permission Ledger */}
         {!allSet && (
-          <div className="bg-ink-panel/90 border border-ink-border rounded-xl p-4 text-left space-y-3 divide-y divide-ink-border-subtle shadow-md">
+          <div className="bg-ink-panel/90 rounded-xl p-4 text-left space-y-3 divide-y divide-ink-border-subtle shadow-md">
             <div className="flex items-center justify-between pb-1">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-muted font-semibold flex items-center gap-1.5">
+              <span className="text-xs text-ink-muted font-semibold flex items-center gap-1.5">
                 <ShieldAlert className="w-3.5 h-3.5 text-ink-accent" />
                 Required macOS Clearances
               </span>
-              <span className="text-[11px] font-mono text-ink-faint">
+              <span className="text-xs text-ink-faint">
                 {[isAccAuthorized, isInputAuthorized].filter(Boolean).length}/2 Granted
               </span>
             </div>
@@ -131,13 +131,13 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
                   ) : accessibility === 'denied' || accessibility === 'restricted' ? (
                     <AlertCircle className="w-4 h-4 text-ink-danger shrink-0" />
                   ) : (
-                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                   )}
-                  <span className="text-xs font-semibold text-ink-text font-sans">
+                  <span className="text-xs font-semibold text-ink-text">
                     1. Accessibility
                   </span>
                 </div>
-                <p className="text-[11px] text-ink-muted leading-normal pl-6">
+                <p className="text-xs text-ink-muted leading-normal pl-6">
                   {isAccAuthorized
                     ? 'Authorized · System event tap active'
                     : accessibility === 'denied' || accessibility === 'restricted'
@@ -148,14 +148,14 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
 
               <div className="shrink-0">
                 {isAccAuthorized ? (
-                  <span className="px-2 py-0.5 font-mono text-[10px] font-medium rounded bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                  <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-950/40 text-emerald-300">
                     Active
                   </span>
                 ) : (
                   <button
                     onClick={handleAccessibility}
                     disabled={isRequestingAcc}
-                    className="px-3 py-1.5 text-xs font-medium rounded bg-ink-accent hover:bg-ink-accent-hover text-white flex items-center gap-1.5 transition-colors shadow-xs"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-ink-accent hover:bg-ink-accent-hover text-white flex items-center gap-1.5 transition-colors shadow-xs"
                   >
                     {isRequestingAcc ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -180,13 +180,13 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
                   ) : inputMonitoring === 'denied' || inputMonitoring === 'restricted' ? (
                     <AlertCircle className="w-4 h-4 text-ink-danger shrink-0" />
                   ) : (
-                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                   )}
-                  <span className="text-xs font-semibold text-ink-text font-sans">
+                  <span className="text-xs font-semibold text-ink-text">
                     2. Input Monitoring
                   </span>
                 </div>
-                <p className="text-[11px] text-ink-muted leading-normal pl-6">
+                <p className="text-xs text-ink-muted leading-normal pl-6">
                   {isInputAuthorized
                     ? 'Authorized · Global keystroke tap connected'
                     : inputMonitoring === 'denied' || inputMonitoring === 'restricted'
@@ -197,14 +197,14 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
 
               <div className="shrink-0">
                 {isInputAuthorized ? (
-                  <span className="px-2 py-0.5 font-mono text-[10px] font-medium rounded bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                  <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-950/40 text-emerald-300">
                     Active
                   </span>
                 ) : (
                   <button
                     onClick={handleInputMonitoring}
                     disabled={isRequestingInp}
-                    className="px-3 py-1.5 text-xs font-medium rounded bg-ink-card hover:bg-ink-hover border border-ink-border text-ink-text flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-ink-card hover:bg-ink-hover text-ink-text flex items-center gap-1.5 transition-colors"
                   >
                     {isRequestingInp ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -225,21 +225,20 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
         {/* Bottom State Bar */}
         <div className="space-y-3">
           {allSet ? (
-            <div className="py-2.5 px-4 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 flex items-center justify-center gap-2 text-xs font-mono">
+            <div className="py-2.5 px-4 rounded-lg bg-emerald-950/30 text-emerald-300 flex items-center justify-center gap-2 text-xs">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>Permissions verified · Starting engine</span>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-ink-panel/60 border border-ink-border-subtle text-xs font-mono text-ink-muted">
-              <span className="w-2 h-2 rounded-full bg-ink-accent animate-pulse shrink-0" />
+            <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-ink-panel/60 text-xs text-ink-muted">
               <span>Awaiting System Settings update...</span>
             </div>
           )}
 
           {/* Privacy Guarantee Seal */}
-          <div className="flex items-center justify-center gap-2 text-[11px] text-ink-faint pt-2 border-t border-ink-border-subtle">
+          <div className="flex items-center justify-center gap-2 text-xs text-ink-faint pt-2 border-t border-ink-border-subtle">
             <Lock className="w-3 h-3 text-ink-muted/80" />
-            <span className="font-mono text-[10px]">
+            <span className="text-xs">
               Local-first · AES-256 encrypted · Zero external telemetry
             </span>
           </div>
@@ -248,4 +247,3 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
     </div>
   );
 };
-

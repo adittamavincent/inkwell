@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CogdexSyncConfig, SyncResponse } from '../types';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, Check, Save } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -75,38 +76,32 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
       }`}
     >
       {/* Header */}
-      <div className="h-13 px-4 border-b border-ink-border flex items-center justify-between bg-ink-sidebar/95">
-        <span className="font-serif text-sm font-semibold tracking-tight text-ink-text">
+      <div className="h-12 px-4 border-b border-ink-border flex items-center justify-between bg-ink-sidebar/95">
+        <span className="font-serif text-sm font-semibold text-ink-text">
           Vault Sync & Engine
         </span>
-        <button
-          onClick={onClose}
-          className="p-1 rounded hover:bg-ink-panel text-ink-muted hover:text-ink-text transition-colors"
-          title="Close Settings"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <IconButton icon={X} title="Close settings" onClick={onClose} size="sm" />
       </div>
 
       {/* Form Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
         {/* Dev Mode TCC Identity Notice */}
         {import.meta.env.DEV && (
-          <div className="p-3 rounded-md bg-ink-accent-muted/30 border border-ink-accent/30 text-ink-accent-light space-y-1">
-            <div className="font-mono text-[11px] font-semibold text-ink-accent-light">
+          <div className="p-3 rounded-md bg-ink-accent-muted/30 text-ink-accent-light space-y-1">
+            <div className="text-xs font-semibold text-ink-accent-light">
               Dev Mode Permission Identity
             </div>
-            <p className="text-[11px] font-sans leading-relaxed text-ink-muted">
+            <p className="text-xs font-sans leading-relaxed text-ink-muted">
               In dev mode, macOS assigns permissions to the <strong className="text-ink-text font-semibold">'Electron'</strong> bundle rather than Inkwell.
             </p>
           </div>
         )}
 
         {/* Master Switch */}
-        <div className="p-3 bg-ink-panel rounded-md border border-ink-border flex items-center justify-between">
+        <div className="p-3 bg-ink-panel rounded-md flex items-center justify-between">
           <div className="pr-3">
             <div className="font-medium text-ink-text text-xs">Enable Vault Sync</div>
-            <div className="text-ink-muted text-[11px] leading-tight mt-0.5">
+            <div className="text-ink-muted text-xs leading-tight mt-0.5">
               Append completed keylog sessions to your Obsidian daily note
             </div>
           </div>
@@ -114,7 +109,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             type="checkbox"
             checked={form.enabled}
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-            className="w-4 h-4 rounded border-ink-border bg-ink-bg text-ink-accent focus:ring-0 cursor-pointer accent-ink-accent"
+            className="w-4 h-4 rounded border-0 bg-ink-bg text-ink-accent focus:ring-0 cursor-pointer accent-ink-accent"
           />
         </div>
 
@@ -128,7 +123,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             placeholder="/Users/username/Documents/ObsidianVault"
             value={form.vaultPath}
             onChange={(e) => setForm({ ...form, vaultPath: e.target.value })}
-            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors"
+            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
           />
         </div>
 
@@ -136,14 +131,14 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         <div>
           <label className="block font-medium text-ink-text mb-1 flex items-center justify-between">
             <span>Daily Folder Root</span>
-            <span className="text-ink-muted font-mono text-[10px]">(default: Daily)</span>
+            <span className="text-ink-muted text-xs">(default: Daily)</span>
           </label>
           <input
             type="text"
             placeholder="Daily"
             value={form.dailyFolderRoot}
             onChange={(e) => setForm({ ...form, dailyFolderRoot: e.target.value })}
-            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors"
+            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
           />
         </div>
 
@@ -156,7 +151,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               placeholder="%Y-%m-%d"
               value={form.dayPattern}
               onChange={(e) => setForm({ ...form, dayPattern: e.target.value })}
-              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors"
+              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
             />
           </div>
           <div>
@@ -166,7 +161,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               placeholder=" - keylog"
               value={form.keylogSuffix}
               onChange={(e) => setForm({ ...form, keylogSuffix: e.target.value })}
-              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors"
+              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
             />
           </div>
         </div>
@@ -185,7 +180,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               onChange={(e) =>
                 setForm({ ...form, idleTimeoutSecs: parseInt(e.target.value, 10) || 60 })
               }
-              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors"
+              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
             />
           </div>
           <div>
@@ -200,7 +195,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               onChange={(e) =>
                 setForm({ ...form, appSwitchGraceSecs: parseInt(e.target.value, 10) || 10 })
               }
-              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors"
+              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
             />
           </div>
         </div>
@@ -215,9 +210,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             value={excludedAppsText}
             onChange={(e) => setExcludedAppsText(e.target.value)}
             placeholder="1password, bitwarden, inkwell, ..."
-            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text font-mono text-xs focus:border-ink-accent transition-colors resize-none"
+            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors resize-none"
           />
-          <span className="text-[10px] text-ink-muted block mt-1">
+          <span className="text-xs text-ink-muted block mt-1">
             Keystrokes occurring within these apps will not be logged.
           </span>
         </div>
@@ -225,10 +220,10 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         {/* Sync Status Banner */}
         {syncStatus && (
           <div
-            className={`p-2.5 rounded-md border text-[11px] font-mono leading-relaxed break-words ${
+            className={`p-2.5 rounded-md text-xs leading-relaxed break-words ${
               syncStatus.success
-                ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300'
-                : 'bg-rose-950/30 border-rose-800/40 text-rose-300'
+                ? 'bg-emerald-950/40 text-emerald-300'
+                : 'bg-rose-950/40 text-rose-300'
             }`}
           >
             {syncStatus.message}
@@ -236,23 +231,26 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         )}
       </div>
 
-      {/* Footer Controls */}
+      {/* Footer Controls (Borderless action buttons with icons) */}
       <div className="p-3.5 border-t border-ink-border bg-ink-sidebar">
         <div className="grid grid-cols-2 gap-2">
           <button
+            type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center justify-center py-2 px-3 rounded bg-ink-panel hover:bg-ink-hover border border-ink-border text-ink-text font-medium transition-colors text-xs"
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-md bg-ink-panel hover:bg-ink-hover text-ink-text font-medium transition-colors text-xs select-none disabled:opacity-40 cursor-pointer"
           >
+            {saveSuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Save className="w-3.5 h-3.5" />}
             <span>{saveSuccess ? 'Saved' : 'Save Config'}</span>
           </button>
 
           <button
+            type="button"
             onClick={handleSync}
             disabled={isSyncing}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded bg-ink-accent hover:bg-ink-accent-hover text-white font-medium transition-colors text-xs shadow-sm"
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-md bg-ink-accent hover:bg-ink-accent-hover text-white font-medium transition-colors text-xs select-none disabled:opacity-40 cursor-pointer shadow-sm"
           >
-            {isSyncing && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Syncing...' : 'Force Sync'}</span>
           </button>
         </div>
@@ -260,5 +258,3 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
     </aside>
   );
 };
-
-

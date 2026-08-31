@@ -1,5 +1,6 @@
 import React from 'react';
-import { Feather } from 'lucide-react';
+import { Feather, Play, Pause, Copy, Check, Trash2, SlidersHorizontal } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 interface HeaderProps {
   isRunning: boolean;
@@ -27,19 +28,19 @@ export const Header: React.FC<HeaderProps> = ({
   sessionCount,
 }) => {
   return (
-    <header className="titlebar-drag-region h-13 bg-ink-sidebar/95 border-b border-ink-border flex items-center justify-between px-4 pl-20 select-none backdrop-blur-md">
-      {/* Left: Branding & Capture State */}
-      <div className="flex items-center gap-3.5 titlebar-no-drag">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#163b54] to-[#1f6f78] border border-ink-accent/40 flex items-center justify-center text-ink-text shadow-sm shadow-black/40">
+    <header className="titlebar-drag-region h-12 bg-ink-sidebar/95 border-b border-ink-border flex items-center justify-between px-4 pl-20 select-none backdrop-blur-md">
+      {/* Left: Branding & Informational Status */}
+      <div className="flex items-center gap-3 titlebar-no-drag">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded bg-gradient-to-br from-[#163b54] to-[#1f6f78] flex items-center justify-center text-ink-text shadow-sm shadow-black/40">
             <Feather className="w-3 h-3 text-ink-accent-light" />
           </div>
-          <span className="font-serif text-[15px] font-semibold tracking-tight text-ink-text">
+          <span className="font-serif text-sm font-semibold text-ink-text">
             Inkwell
           </span>
           {import.meta.env.DEV && (
             <span
-              className="text-[9px] font-mono font-medium tracking-wider px-1.5 py-0.5 rounded bg-ink-accent-muted/40 text-ink-accent-light border border-ink-accent/30"
+              className="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded bg-ink-accent-muted/40 text-ink-accent-light"
               title="Running in dev mode — permissions assigned to 'Electron' in macOS settings."
             >
               DEV
@@ -49,85 +50,60 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="h-3.5 w-px bg-ink-border/80 mx-0.5" />
 
-        {/* Capture State Trigger */}
-        <button
-          onClick={onToggleCapture}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-            isRunning
-              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/40 hover:border-emerald-700/50'
-              : 'bg-amber-950/40 text-amber-300 border-amber-800/40 hover:bg-amber-900/40 hover:border-amber-700/50'
-          }`}
-          title={isRunning ? 'Pause global keystroke capture' : 'Resume keystroke capture'}
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isRunning ? 'bg-emerald-400' : 'bg-amber-400'
-            }`}
-          />
-          <span className="text-[11px] tracking-wide uppercase font-mono">
-            {isRunning ? 'Logging' : 'Paused'}
-          </span>
-        </button>
-
-        {/* Active Application Tag */}
+        {/* Informational App Tag */}
         {detectedApp && (
           <div
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-ink-panel border border-ink-border text-xs text-ink-muted"
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-ink-panel/60 text-xs text-ink-muted"
             title={`Active frontmost app: ${detectedApp}`}
           >
             {detectedAppIcon && (
               <img
                 src={detectedAppIcon}
                 alt=""
-                className="w-4 h-4 rounded-sm shrink-0 object-contain"
+                className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"
               />
             )}
-            <span className="text-ink-text font-mono text-[11px] truncate max-w-[130px] sm:max-w-[170px]">
+            <span className="text-ink-text text-xs truncate max-w-[130px] sm:max-w-[170px]">
               {detectedApp}
             </span>
           </div>
         )}
 
-        <span className="text-xs font-mono text-ink-faint hidden lg:inline">
+        <span className="text-xs text-ink-faint hidden lg:inline">
           {sessionCount} {sessionCount === 1 ? 'entry' : 'entries'}
         </span>
       </div>
 
-      {/* Right: Actions */}
-      <div className="flex items-center gap-2 titlebar-no-drag">
-        <button
+      {/* Right: Actions (Icon-only, borderless buttons) */}
+      <div className="flex items-center gap-1 titlebar-no-drag">
+        <IconButton
+          icon={isRunning ? Pause : Play}
+          title={isRunning ? 'Pause capture' : 'Resume capture'}
+          variant={isRunning ? 'default' : 'warning'}
+          onClick={onToggleCapture}
+        />
+
+        <IconButton
+          icon={isCopied ? Check : Copy}
+          title={isCopied ? 'Copied buffer to clipboard' : 'Copy buffer'}
+          variant={isCopied ? 'success' : 'default'}
           onClick={onCopyAll}
-          className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-ink-panel hover:bg-ink-hover border border-ink-border text-ink-text transition-colors"
-          title="Copy formatted preview to clipboard"
-        >
-          {isCopied ? (
-            <span className="text-emerald-400 font-mono text-[11px]">Copied</span>
-          ) : (
-            <span>Copy Buffer</span>
-          )}
-        </button>
+        />
 
-        <button
-          onClick={onClear}
-          className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-ink-panel hover:bg-ink-danger-muted border border-ink-border hover:border-ink-danger/50 text-ink-muted hover:text-ink-danger transition-colors"
+        <IconButton
+          icon={Trash2}
           title="Clear all stored keystrokes"
-        >
-          <span>Clear</span>
-        </button>
+          variant="danger"
+          onClick={onClear}
+        />
 
-        <button
+        <IconButton
+          icon={SlidersHorizontal}
+          title="Vault Sync Settings"
+          active={isSettingsOpen}
           onClick={onToggleSettings}
-          className={`px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-            isSettingsOpen
-              ? 'bg-ink-accent text-white border-ink-accent shadow-sm'
-              : 'bg-ink-panel hover:bg-ink-hover border border-ink-border text-ink-text'
-          }`}
-          title="Toggle Vault Sync Settings"
-        >
-          <span>Vault Sync</span>
-        </button>
+        />
       </div>
     </header>
   );
 };
-
