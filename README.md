@@ -82,6 +82,8 @@ tccutil reset ListenEvent com.inkwell.app
 
 ## Packaging & Releases
 
+Inkwell runs as a menu-bar-only background app (no Dock icon, `LSUIElement`). Only the Tray's Quit Inkwell item fully terminates the process; Cmd+Q and the window close button just hide the window.
+
 Bundling is handled by `electron-builder` targeting macOS Apple Silicon (`arm64`):
 
 ```bash

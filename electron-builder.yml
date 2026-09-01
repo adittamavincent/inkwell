@@ -7,9 +7,12 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+  - icons/**/*
   - package.json
 afterPack: build/afterPack.cjs
 mac:
+  extendInfo:
+    LSUIElement: true
   category: public.app-category.utilities
   identity: null
   hardenedRuntime: false

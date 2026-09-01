@@ -1,17 +1,35 @@
 import { app, Menu, nativeImage, Tray, BrowserWindow } from 'electron';
+import path from 'node:path';
 import { isCaptureRunning, startCapture, stopCapture } from '../capture/keyHook';
+import { requestQuit } from '../lifecycle';
 
 let tray: Tray | null = null;
 
 function createTrayIcon(): Electron.NativeImage {
-  // Create a clean 16x16 monochrome template icon for macOS menu bar
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>`;
-  const img = nativeImage.createFromBuffer(Buffer.from(svg));
+  // Load a proper PNG template image for the macOS menu bar.
+  // nativeImage.createFromBuffer does NOT support SVG — only PNG/JPEG/BMP.
+  // macOS template images automatically adapt to light/dark mode.
+  // Resolve relative to the app root so this works in both dev and packaged builds.
+  const appRoot = app.getAppPath();
+  const iconPath = path.join(appRoot, 'icons', 'trayTemplate.png');
+  const img = nativeImage.createFromPath(iconPath);
   img.setTemplateImage(true);
   return img;
 }
 
-export function updateTrayMenu(mainWindow: BrowserWindow | null): void {
+export type WindowTarget = BrowserWindow | null | (() => BrowserWindow | null);
+
+function resolveWindow(target?: WindowTarget): BrowserWindow | null {
+  if (typeof target === 'function') {
+    return target();
+  }
+  return target || null;
+}
+
+export function updateTrayMenu(
+  windowTarget?: WindowTarget,
+  onOpenWindow?: () => void
+): void {
   if (!tray) return;
 
   const running = isCaptureRunning();
@@ -29,16 +47,21 @@ export function updateTrayMenu(mainWindow: BrowserWindow | null): void {
         } else {
           startCapture();
         }
-        updateTrayMenu(mainWindow);
+        updateTrayMenu(windowTarget, onOpenWindow);
       },
     },
     {
       label: 'Open Inkwell Window',
       click: () => {
-        if (mainWindow) {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.show();
-          mainWindow.focus();
+        if (onOpenWindow) {
+          onOpenWindow();
+        } else {
+          const win = resolveWindow(windowTarget);
+          if (win) {
+            if (win.isMinimized()) win.restore();
+            win.show();
+            win.focus();
+          }
         }
       },
     },
@@ -46,7 +69,7 @@ export function updateTrayMenu(mainWindow: BrowserWindow | null): void {
     {
       label: 'Quit Inkwell',
       click: () => {
-        app.quit();
+        requestQuit();
       },
     },
   ]);
@@ -55,18 +78,30 @@ export function updateTrayMenu(mainWindow: BrowserWindow | null): void {
   tray.setContextMenu(contextMenu);
 }
 
-export function setupTray(mainWindow: BrowserWindow | null): Tray {
+export function setupTray(
+  windowTarget?: WindowTarget,
+  onOpenWindow?: () => void,
+  onHideWindow?: () => void
+): Tray {
   const icon = createTrayIcon();
   tray = new Tray(icon);
-  updateTrayMenu(mainWindow);
+  updateTrayMenu(windowTarget, onOpenWindow);
 
   tray.on('click', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
+    const win = resolveWindow(windowTarget);
+    if (win && win.isVisible()) {
+      if (onHideWindow) {
+        onHideWindow();
       } else {
-        mainWindow.show();
-        mainWindow.focus();
+        win.hide();
+      }
+    } else {
+      if (onOpenWindow) {
+        onOpenWindow();
+      } else if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
       }
     }
   });

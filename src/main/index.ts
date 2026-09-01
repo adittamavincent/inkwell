@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, Menu, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,19 +12,102 @@ import { stopCapture } from './capture/keyHook';
 import { stopActiveAppTracker } from './capture/activeApp';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray, updateTrayMenu } from './tray/trayManager';
+import { getIsQuitting, setIsQuitting, requestQuit } from './lifecycle';
+
+export { requestQuit };
 
 let mainWindow: BrowserWindow | null = null;
 
+export function showWindow(): void {
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.show();
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+export function hideWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+    mainWindow.hide();
+  }
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.hide();
+  }
+}
+
+function setupApplicationMenu(): void {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Inkwell',
+      submenu: [
+        { role: 'about', label: 'About Inkwell' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', label: 'Hide Inkwell' },
+        { role: 'hideOthers', label: 'Hide Others' },
+        { role: 'unhide', label: 'Show All' },
+        { type: 'separator' },
+        {
+          label: 'Close Window',
+          accelerator: 'CommandOrControl+W',
+          click: () => {
+            hideWindow();
+          },
+        },
+        {
+          label: 'Close to Menu Bar',
+          accelerator: 'CommandOrControl+Q',
+          click: () => {
+            hideWindow();
+          },
+        },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
+  setIsQuitting(true);
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showWindow();
   });
 }
 
@@ -53,6 +136,7 @@ function createWindow(): void {
     minHeight: 520,
     title: 'Inkwell',
     backgroundColor: '#0d1317',
+    show: false,
     titleBarStyle: 'hiddenInset',
     vibrancy: 'under-window',
     visualEffectState: 'active',
@@ -67,7 +151,26 @@ function createWindow(): void {
   });
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show();
+    showWindow();
+  });
+
+  mainWindow.on('show', () => {
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.show();
+    }
+  });
+
+  mainWindow.on('hide', () => {
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.hide();
+    }
+  });
+
+  mainWindow.on('close', (event) => {
+    if (!getIsQuitting() && process.platform === 'darwin') {
+      event.preventDefault();
+      hideWindow();
+    }
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -83,33 +186,51 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Set custom Dock icon in dev mode if available
+  if (process.platform === 'darwin' && app.dock) {
+    const iconPath = path.join(app.getAppPath(), 'icons', 'icon.icns');
+    if (fs.existsSync(iconPath)) {
+      try {
+        app.dock.setIcon(iconPath);
+      } catch {
+        // Ignore fallback
+      }
+    }
+  }
+
   // 1. Initialize config & DB
   loadConfig();
   getDatabase();
 
-  // 2. Register IPC bridge
+  // 2. Setup macOS Application Menu
+  setupApplicationMenu();
+
+  // 3. Register IPC bridge
   registerIpcHandlers(() => mainWindow);
 
-  // 3. Create window & Tray
+  // 4. Create window & Tray
   createWindow();
-  setupTray(mainWindow);
+  setupTray(() => mainWindow, showWindow, hideWindow);
 
-  // 4. Start continuous background permission watcher (initial sync + polling)
+  // 5. Start continuous background permission watcher (initial sync + polling)
   startPermissionWatcher((_status) => {
-    updateTrayMenu(mainWindow);
+    updateTrayMenu(() => mainWindow, showWindow);
   }, 2000);
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    } else {
-      mainWindow?.show();
-      mainWindow?.focus();
-    }
+    showWindow();
   });
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  // On macOS, prevent quitting unless requestQuit() was explicitly called (e.g. from Tray menu)
+  if (!getIsQuitting() && process.platform === 'darwin') {
+    event.preventDefault();
+    hideWindow();
+    return;
+  }
+
+  setIsQuitting(true);
   stopPermissionWatcher();
   stopActiveAppTracker();
   stopCapture();
