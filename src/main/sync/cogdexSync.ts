@@ -57,6 +57,18 @@ function appendToNote(filePath: string, blocks: string[]): void {
   fs.writeFileSync(filePath, newContent, 'utf8');
 }
 
+/**
+ * Resolve the keylog file path for a given config and date.
+ * Uses README.md inside the day folder (read-only convention).
+ */
+function resolveKeylogPath(config: CogdexSyncConfig, now: Date): string {
+  const dayPattern = config.dayPattern || '%Y-%m-%d';
+  const dayName = formatStrftime(dayPattern, now);
+  const cleanVault = (config.vaultPath || '').replace(/\/+$/, '');
+  const dailyRoot = stripLeadingSlash(config.dailyFolderRoot || 'Daily');
+  return path.join(cleanVault, dailyRoot, dayName, 'README.md');
+}
+
 export function doSync(config: CogdexSyncConfig): { success: boolean; message: string } {
   if (!config.enabled) {
     return {
@@ -93,19 +105,7 @@ export function doSync(config: CogdexSyncConfig): { success: boolean; message: s
   }
 
   const now = new Date();
-  const dayPattern = config.dayPattern || '%Y-%m-%d';
-  const dayName = formatStrftime(dayPattern, now);
-  const cleanVault = vaultPath.replace(/\/+$/, '');
-  const dailyRoot = stripLeadingSlash(config.dailyFolderRoot || 'Daily');
-  const suffix = config.keylogSuffix ?? ' - keylog';
-
-  const notePath = path.join(
-    cleanVault,
-    dailyRoot,
-    dayName,
-    `${dayName}${suffix}.md`
-  );
-
+  const notePath = resolveKeylogPath(config, now);
   const blocks = buildSessionBlocks(sessions);
 
   try {

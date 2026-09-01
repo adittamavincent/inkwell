@@ -3,7 +3,8 @@ export interface CogdexSyncConfig {
   vaultPath: string;
   dailyFolderRoot: string;
   dayPattern: string;
-  keylogSuffix: string;
+  /** Auto-sync to keylog after idle timeout (seconds). 0 = disabled. */
+  autoSyncIdleSecs: number;
   idleTimeoutSecs: number;
   appSwitchGraceSecs: number;
   excludedApps: string[];
@@ -25,7 +26,7 @@ export const DEFAULT_CONFIG: CogdexSyncConfig = {
   vaultPath: '',
   dailyFolderRoot: 'Daily',
   dayPattern: '%Y-%m-%d',
-  keylogSuffix: ' - keylog',
+  autoSyncIdleSecs: 30,
   idleTimeoutSecs: 60,
   appSwitchGraceSecs: 10,
   excludedApps: DEFAULT_EXCLUDED_APPS,

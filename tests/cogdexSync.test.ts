@@ -21,19 +21,18 @@ describe('Cogdex Obsidian Sync', () => {
     vi.restoreAllMocks();
   });
 
-  it('cleanly appends new sessions to existing keylog note without any boundary markers', () => {
+  it('cleanly appends new sessions to existing README.md without any boundary markers', () => {
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const dayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
     const noteDir = path.join(tmpVault, 'Daily', dayStr);
     fs.mkdirSync(noteDir, { recursive: true });
-    const notePath = path.join(noteDir, `${dayStr} - keylog.md`);
+    const notePath = path.join(noteDir, 'README.md');
 
     const existingContent = '## 09:00 — Terminal\n\ngit status\n';
     fs.writeFileSync(notePath, existingContent, 'utf8');
 
-    // Mock querySessionsSince to return test keystrokes
     vi.spyOn(repo, 'querySessionsSince').mockReturnValue([
       [now.toISOString(), 'Obsidian', 'n'],
       [now.toISOString(), 'Obsidian', 'e'],
@@ -45,7 +44,7 @@ describe('Cogdex Obsidian Sync', () => {
       vaultPath: tmpVault,
       dailyFolderRoot: 'Daily',
       dayPattern: '%Y-%m-%d',
-      keylogSuffix: ' - keylog',
+      autoSyncIdleSecs: 30,
       idleTimeoutSecs: 60,
       appSwitchGraceSecs: 10,
       excludedApps: [],
@@ -54,21 +53,18 @@ describe('Cogdex Obsidian Sync', () => {
     expect(result.success).toBe(true);
 
     const fileContent = fs.readFileSync(notePath, 'utf8');
-    // Verify previous content is intact
     expect(fileContent).toContain('## 09:00 — Terminal');
     expect(fileContent).toContain('git status');
-    // Verify new content was appended cleanly
     expect(fileContent).toContain('Obsidian');
     expect(fileContent).toContain('new');
-    // Verify no boundary comment marker exists
     expect(fileContent).not.toContain('LOG-BELOW');
   });
 
-  it('creates parent folder and writes clean keylog note if file does not exist yet', () => {
+  it('creates parent folder and writes README.md if file does not exist yet', () => {
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const dayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const notePath = path.join(tmpVault, 'Daily', dayStr, `${dayStr} - keylog.md`);
+    const notePath = path.join(tmpVault, 'Daily', dayStr, 'README.md');
 
     vi.spyOn(repo, 'querySessionsSince').mockReturnValue([
       [now.toISOString(), 'Code', 'h'],
@@ -80,7 +76,7 @@ describe('Cogdex Obsidian Sync', () => {
       vaultPath: tmpVault,
       dailyFolderRoot: 'Daily',
       dayPattern: '%Y-%m-%d',
-      keylogSuffix: ' - keylog',
+      autoSyncIdleSecs: 30,
       idleTimeoutSecs: 60,
       appSwitchGraceSecs: 10,
       excludedApps: [],

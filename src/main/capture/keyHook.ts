@@ -5,6 +5,7 @@ import { getFrontmostAppName } from './activeApp';
 import { checkAccessibilityStatus, checkInputMonitoringStatus } from './permissions';
 import { getConfig } from '../config/store';
 import { insertKeystroke } from '../db/repository';
+import { doSync } from '../sync/cogdexSync';
 
 const require = createRequire(import.meta.url);
 
@@ -19,6 +20,27 @@ let isRunning = false;
 const queue: QueuedKeystroke[] = [];
 let isProcessingQueue = false;
 const recentKeys: string[] = [];
+
+// Auto-sync idle timer: triggers doSync() after user stops typing
+let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleAutoSync(): void {
+  const config = getConfig();
+  const idleSecs = config.autoSyncIdleSecs ?? 30;
+  if (idleSecs <= 0 || !config.enabled) return;
+
+  if (autoSyncTimer !== null) {
+    clearTimeout(autoSyncTimer);
+  }
+  autoSyncTimer = setTimeout(() => {
+    autoSyncTimer = null;
+    try {
+      doSync(config);
+    } catch {
+      // silent — auto-sync is best-effort
+    }
+  }, idleSecs * 1000);
+}
 
 // Lazily loaded uiohook handle — only populated after permission granted
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -175,6 +197,9 @@ function handleKeyDown(e: UiohookKeyboardEventLike): void {
     keyCode: e.keycode,
   });
 
+  // Schedule auto-sync: will fire after idleTimeout of inactivity
+  scheduleAutoSync();
+
   // Schedule async queue processor without blocking hook callback
   setImmediate(() => {
     processQueue();
@@ -219,6 +244,10 @@ export function startCapture(): boolean {
 
 export function stopCapture(): boolean {
   try {
+    if (autoSyncTimer !== null) {
+      clearTimeout(autoSyncTimer);
+      autoSyncTimer = null;
+    }
     if (hook) {
       hook.removeAllListeners('keydown');
       hook.removeAllListeners('keyup');

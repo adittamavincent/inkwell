@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { RichContentText } from './RichContentText';
 
 interface LiveFeedProps {
@@ -17,6 +17,13 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({
   tokenCount,
 }) => {
   const count = keystrokeCount ?? tokenCount ?? 0;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [text]);
 
   if (!text && !count) {
     return (
@@ -27,8 +34,8 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({
   }
 
   return (
-    <div className="p-3 bg-ink-panel/70 border-b border-ink-border select-none">
-      <div className="flex items-center justify-between mb-2">
+    <div className="p-3 bg-ink-panel/70 border-b border-ink-border select-none max-h-[50vh] flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between mb-2 shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-ink-muted">Active buffer</span>
           <span className="px-2 py-0.5 rounded bg-ink-card text-ink-text text-xs font-medium flex items-center gap-1.5">
@@ -49,7 +56,7 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({
         </div>
       </div>
 
-      <div className="font-mono text-xs leading-relaxed bg-ink-bg p-2.5 rounded-md border border-ink-border text-ink-text whitespace-pre-wrap break-words [overflow-wrap:anywhere] min-h-[48px] shadow-inner select-text">
+      <div ref={scrollRef} className="font-mono text-xs leading-relaxed bg-ink-bg p-2.5 rounded-md border border-ink-border text-ink-text whitespace-pre-wrap break-words [overflow-wrap:anywhere] min-h-[48px] shadow-inner select-text overflow-y-auto flex-1">
         {text ? (
           <>
             <RichContentText text={text} />

@@ -10,7 +10,7 @@ export interface CogdexSyncConfig {
   vaultPath: string;
   dailyFolderRoot: string;
   dayPattern: string;
-  keylogSuffix: string;
+  autoSyncIdleSecs: number;
   idleTimeoutSecs: number;
   appSwitchGraceSecs: number;
   excludedApps: string[];
