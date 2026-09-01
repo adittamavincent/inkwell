@@ -18,11 +18,18 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({
 }) => {
   const count = keystrokeCount ?? tokenCount ?? 0;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      });
     }
+    return () => cancelAnimationFrame(rafRef.current);
   }, [text]);
 
   if (!text && !count) {

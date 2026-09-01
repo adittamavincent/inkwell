@@ -27,7 +27,9 @@ export function showWindow(): void {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
   mainWindow.focus();
 }
 
@@ -218,7 +220,11 @@ app.whenReady().then(() => {
   }, 2000);
 
   app.on('activate', () => {
-    showWindow();
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      mainWindow.focus();
+    } else {
+      showWindow();
+    }
   });
 });
 
