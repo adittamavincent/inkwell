@@ -2,6 +2,7 @@ import { app, Menu, nativeImage, Tray, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { isCaptureRunning, startCapture, stopCapture } from '../capture/keyHook';
 import { requestQuit } from '../lifecycle';
+import { logger } from '../logger';
 
 let tray: Tray | null = null;
 
@@ -86,6 +87,7 @@ export function setupTray(
   const icon = createTrayIcon();
   tray = new Tray(icon);
   updateTrayMenu(windowTarget, onOpenWindow);
+  logger.info('tray', 'System tray initialized');
 
   tray.on('click', () => {
     const win = resolveWindow(windowTarget);

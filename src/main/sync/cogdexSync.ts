@@ -4,6 +4,7 @@ import { CogdexSyncConfig } from '../config/store';
 import { querySessionsSince } from '../db/repository';
 import { groupSessions, SessionPreview } from './sessionGrouper';
 import { getLastSync, writeLastSync } from './watermark';
+import { logger } from '../logger';
 
 function formatStrftime(pattern: string, date: Date): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
@@ -111,11 +112,13 @@ export function doSync(config: CogdexSyncConfig): { success: boolean; message: s
   try {
     appendToNote(notePath, blocks);
     writeLastSync(now);
+    logger.info('cogdexSync', `Synced ${sessions.length} session(s) to ${notePath}`);
     return {
       success: true,
       message: `Synced ${sessions.length} session(s) to ${notePath}`,
     };
   } catch (err: any) {
+    logger.error('cogdexSync', 'Sync failed', err);
     return {
       success: false,
       message: `Sync failed: ${err?.message || String(err)}`,

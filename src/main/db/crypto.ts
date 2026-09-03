@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { logger } from '../logger';
 
 const KEY_FILE = 'db.key';
 let cachedKey: Buffer | null = null;
@@ -46,10 +47,7 @@ function loadOrCreateKey(): Buffer | null {
     return cachedKey;
   } catch (err) {
     if (!encryptionFailedWarned) {
-      console.warn(
-        'Inkwell: Could not load/create the encryption key; keystrokes will be stored UNENCRYPTED this session.',
-        err
-      );
+      logger.warn('crypto', 'Could not load/create encryption key — keystrokes stored UNENCRYPTED this session', err);
       encryptionFailedWarned = true;
     }
     return null;

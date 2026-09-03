@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.setName('Inkwell');
+
+import { logger } from './logger';
 import { loadConfig } from './config/store';
 import { getDatabase } from './db/connection';
 import { startPermissionWatcher, stopPermissionWatcher } from './capture/permissionWatcher';
@@ -13,6 +15,31 @@ import { stopActiveAppTracker } from './capture/activeApp';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { setupTray, updateTrayMenu } from './tray/trayManager';
 import { getIsQuitting, setIsQuitting, requestQuit } from './lifecycle';
+
+// ── Global error handlers ──────────────────────────────────────────────────────
+// These catch crashes that would otherwise kill the app silently.
+process.on('uncaughtException', (err) => {
+  logger.error('main', 'UNCAUGHT EXCEPTION — app may crash', err);
+  // Give the logger time to flush before exiting
+  setTimeout(() => {
+    logger.close();
+    process.exit(1);
+  }, 200);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('main', 'UNHANDLED PROMISE REJECTION', reason);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('main', 'Received SIGTERM, quitting...');
+  requestQuit();
+});
+
+process.on('SIGINT', () => {
+  logger.info('main', 'Received SIGINT, quitting...');
+  requestQuit();
+});
 
 export { requestQuit };
 
@@ -139,6 +166,7 @@ function createWindow(): void {
     title: 'Inkwell',
     backgroundColor: '#0d1317',
     show: false,
+    skipTaskbar: true,
     titleBarStyle: 'hiddenInset',
     vibrancy: 'under-window',
     visualEffectState: 'active',
@@ -152,8 +180,10 @@ function createWindow(): void {
     },
   });
 
+  // DO NOT call showWindow() from ready-to-show — this steals focus from the user's
+  // current app on launch. The tray icon handles window visibility instead.
   mainWindow.on('ready-to-show', () => {
-    showWindow();
+    logger.info('main', 'BrowserWindow ready-to-show (staying hidden for tray app)');
   });
 
   mainWindow.on('show', () => {
@@ -175,6 +205,10 @@ function createWindow(): void {
     }
   });
 
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: 'deny' };
@@ -188,6 +222,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  logger.info('main', `App ready — PID ${process.pid}, platform ${process.platform}`);
+
   // Set custom Dock icon in dev mode if available
   if (process.platform === 'darwin' && app.dock) {
     const iconPath = path.join(app.getAppPath(), 'icons', 'icon.icns');
@@ -203,6 +239,7 @@ app.whenReady().then(() => {
   // 1. Initialize config & DB
   loadConfig();
   getDatabase();
+  logger.info('main', 'Config and database initialized');
 
   // 2. Setup macOS Application Menu
   setupApplicationMenu();
@@ -218,6 +255,8 @@ app.whenReady().then(() => {
   startPermissionWatcher((_status) => {
     updateTrayMenu(() => mainWindow, showWindow);
   }, 2000);
+
+  logger.info('main', 'Initialization complete');
 
   app.on('activate', () => {
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
@@ -236,10 +275,12 @@ app.on('before-quit', (event) => {
     return;
   }
 
+  logger.info('main', 'before-quit — cleaning up resources');
   setIsQuitting(true);
   stopPermissionWatcher();
   stopActiveAppTracker();
   stopCapture();
+  logger.close();
 });
 
 app.on('window-all-closed', () => {

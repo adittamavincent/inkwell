@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getAppDataDir } from '../db/crypto';
+import { logger } from '../logger';
 import {
   CogdexSyncConfig,
   DEFAULT_CONFIG,
@@ -34,7 +35,7 @@ export function loadConfig(): CogdexSyncConfig {
       return currentConfig;
     }
   } catch (err) {
-    console.warn('Inkwell: Could not read config file, using defaults.', err);
+    logger.warn('config', 'Could not read config file, using defaults', err);
   }
   currentConfig = { ...DEFAULT_CONFIG };
   return currentConfig;

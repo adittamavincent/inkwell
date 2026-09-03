@@ -6,6 +6,7 @@ import { checkAccessibilityStatus, checkInputMonitoringStatus } from './permissi
 import { getConfig } from '../config/store';
 import { insertKeystroke } from '../db/repository';
 import { doSync } from '../sync/cogdexSync';
+import { logger } from '../logger';
 
 const require = createRequire(import.meta.url);
 
@@ -109,7 +110,7 @@ async function processQueue(): Promise<void> {
       try {
         insertKeystroke(item.timestamp, item.appName, item.keyChar, item.keyCode);
       } catch (err) {
-        console.error('Inkwell: Failed to persist keystroke:', err);
+        logger.error('keyHook', 'Failed to persist keystroke', err);
       }
 
       // 2. Broadcast to UI windows
@@ -135,6 +136,14 @@ async function processQueue(): Promise<void> {
 }
 
 function handleKeyDown(e: UiohookKeyboardEventLike): void {
+  try {
+    _handleKeyDownInner(e);
+  } catch (err) {
+    logger.error('keyHook', 'Unhandled error in handleKeyDown', err);
+  }
+}
+
+function _handleKeyDownInner(e: UiohookKeyboardEventLike): void {
   updateModifiers(e.keycode, true);
 
   const token = mapKeyEventToToken(e, modifiers);
@@ -206,7 +215,11 @@ function handleKeyDown(e: UiohookKeyboardEventLike): void {
 }
 
 function handleKeyUp(e: UiohookKeyboardEventLike): void {
-  updateModifiers(e.keycode, false);
+  try {
+    updateModifiers(e.keycode, false);
+  } catch (err) {
+    logger.error('keyHook', 'Unhandled error in handleKeyUp', err);
+  }
 }
 
 export function startCapture(): boolean {
@@ -217,9 +230,7 @@ export function startCapture(): boolean {
   const inputMonitoring = checkInputMonitoringStatus();
 
   if (accessibility !== 'authorized' || inputMonitoring !== 'authorized') {
-    console.warn(
-      `Inkwell: Cannot start capture tap — Permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}).`
-    );
+    logger.warn('keyHook', `Cannot start capture — permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring})`);
     isRunning = false;
     return false;
   }
@@ -234,9 +245,10 @@ export function startCapture(): boolean {
 
     isRunning = true;
     startBackgroundSync();
+    logger.info('keyHook', 'Capture started successfully');
     return true;
   } catch (err) {
-    console.error('Inkwell: Failed to start uiohook key capture:', err);
+    logger.error('keyHook', 'Failed to start uiohook key capture', err);
     isRunning = false;
     return false;
   }
@@ -252,8 +264,9 @@ export function stopCapture(): boolean {
         hook.stop();
       }
     }
+    logger.info('keyHook', 'Capture stopped');
   } catch (err) {
-    console.error('Inkwell: Failed to stop uiohook key capture:', err);
+    logger.error('keyHook', 'Failed to stop uiohook key capture', err);
   } finally {
     isRunning = false;
   }

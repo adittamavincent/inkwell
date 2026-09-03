@@ -6,6 +6,7 @@ import {
 } from './permissions';
 import { startCapture, stopCapture, isCaptureRunning } from './keyHook';
 import { startActiveAppTracker, stopActiveAppTracker } from './activeApp';
+import { logger } from '../logger';
 
 let activeInterval: NodeJS.Timeout | null = null;
 let lastKnownStatus: PermissionStatus | null = null;
@@ -64,13 +65,11 @@ export function checkAndSyncPermissionState(): PermissionStatus {
     lastKnownStatus = currentStatus;
 
     if (isFullyAuthorized) {
-      console.log('Inkwell: Permissions fully authorized. Starting capture tap & app tracker.');
+      logger.info('permissionWatcher', 'Permissions fully authorized — starting capture & app tracker');
       startActiveAppTracker();
       startCapture();
     } else {
-      console.warn(
-        `Inkwell: Permissions not fully authorized (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}). Stopping capture tap & app tracker.`
-      );
+      logger.warn('permissionWatcher', `Permissions revoked (Accessibility: ${accessibility}, Input Monitoring: ${inputMonitoring}) — stopping capture & app tracker`);
       stopActiveAppTracker();
       stopCapture();
     }
@@ -81,7 +80,7 @@ export function checkAndSyncPermissionState(): PermissionStatus {
       try {
         statusChangeCallback(currentStatus);
       } catch (err) {
-        console.error('Inkwell: Error in permission status callback:', err);
+        logger.error('permissionWatcher', 'Error in permission status callback', err);
       }
     }
   }

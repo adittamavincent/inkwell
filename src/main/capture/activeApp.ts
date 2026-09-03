@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import activeWin from 'active-win';
 import { BrowserWindow, app } from 'electron';
+import { logger } from '../logger';
 
 export interface ActiveAppInfo {
   name: string;
@@ -118,30 +119,37 @@ function findAppBundlePath(appName: string, ownerPath?: string): string | null {
 // Icon extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
-function icnsToDataUrl(icnsPath: string): string | null {
-  try {
-    const tmpPath = path.join(os.tmpdir(), `inkwell_icon_${Date.now()}.png`);
-    execFileSync('/usr/bin/sips', [
-      '-s', 'format', 'png',
-      '-z', '32', '32',
-      icnsPath,
-      '--out', tmpPath,
-    ], { timeout: 2000 });
-
-    if (fs.existsSync(tmpPath)) {
-      const buf = fs.readFileSync(tmpPath);
-      try { fs.unlinkSync(tmpPath); } catch {}
-      if (buf.length > 100) {
-        // Sanity check: PNG magic header must be present
-        if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-          return `data:image/png;base64,${buf.toString('base64')}`;
+function icnsToDataUrl(icnsPath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const tmpPath = path.join(os.tmpdir(), `inkwell_icon_${Date.now()}.png`);
+      execFile('/usr/bin/sips', [
+        '-s', 'format', 'png',
+        '-z', '32', '32',
+        icnsPath,
+        '--out', tmpPath,
+      ], { timeout: 2000 }, (err) => {
+        if (err) {
+          resolve(null);
+          return;
         }
-      }
+        try {
+          if (fs.existsSync(tmpPath)) {
+            const buf = fs.readFileSync(tmpPath);
+            try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+            if (buf.length > 100 &&
+                buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+              resolve(`data:image/png;base64,${buf.toString('base64')}`);
+              return;
+            }
+          }
+        } catch { /* ignore */ }
+        resolve(null);
+      });
+    } catch {
+      resolve(null);
     }
-  } catch {
-    // sips unavailable or timed out
-  }
-  return null;
+  });
 }
 
 function findInkwellIconPath(): string | null {
@@ -175,7 +183,7 @@ export async function fetchAppIcon(ownerPath?: string, appName?: string): Promis
     }
     const inkwellIconPath = findInkwellIconPath();
     if (inkwellIconPath) {
-      const dataUrl = icnsToDataUrl(inkwellIconPath);
+      const dataUrl = await icnsToDataUrl(inkwellIconPath);
       if (dataUrl) {
         iconCache.set('Inkwell', dataUrl);
         iconCache.set('Electron', dataUrl);
@@ -196,10 +204,10 @@ export async function fetchAppIcon(ownerPath?: string, appName?: string): Promis
     return null;
   }
 
-  // Step 1: sips-based .icns extraction — always exact, native high-res OS icon
+  // Step 1: async sips-based .icns extraction — non-blocking, native high-res OS icon
   const icnsPath = getIcnsPathFromBundle(bundlePath);
   if (icnsPath) {
-    const dataUrl = icnsToDataUrl(icnsPath);
+    const dataUrl = await icnsToDataUrl(icnsPath);
     if (dataUrl) {
       if (cacheKey) iconCache.set(cacheKey, dataUrl);
       return dataUrl;
@@ -263,12 +271,17 @@ async function refreshActiveApp(): Promise<void> {
 
       const isCurrentApp =
         newName.toLowerCase() === 'electron' ||
+        newName.toLowerCase() === 'inkwell' ||
         (result.owner as any).bundleId === 'com.github.Electron' ||
+        (result.owner as any).bundleId === 'com.inkwell.app' ||
         result.owner.processId === process.pid ||
-        (ownerPath && ownerPath.includes('Electron.app'));
+        (ownerPath && (ownerPath.includes('Electron.app') || ownerPath.includes('Inkwell.app')));
 
       if (isCurrentApp) {
-        newName = 'Inkwell';
+        // Do NOT broadcast Inkwell as the active app — this causes ghost focus issues.
+        // Keep the previous cached app name so other apps aren't interrupted.
+        logger.debug('activeApp', `activeWin returned Inkwell/Electron (pid=${result.owner.processId}), suppressing broadcast`);
+        return;
       }
 
       const icon = await fetchAppIcon(ownerPath, newName);
@@ -276,10 +289,12 @@ async function refreshActiveApp(): Promise<void> {
       if (newName !== cachedAppName || icon !== cachedAppIcon) {
         cachedAppName = newName;
         cachedAppIcon = icon;
+        logger.debug('activeApp', `Active app changed to: ${newName}`);
         broadcastActiveApp({ name: cachedAppName, icon: cachedAppIcon });
       }
     }
-  } catch {
+  } catch (err) {
+    logger.warn('activeApp', 'refreshActiveApp error (retaining cached state)', err);
     // Retain cached state on transient errors
   } finally {
     lastQueryTime = Date.now();
