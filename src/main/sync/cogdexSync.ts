@@ -59,14 +59,14 @@ function appendToNote(filePath: string, blocks: string[]): void {
 
 /**
  * Resolve the keylog file path for a given config and date.
- * Uses README.md inside the day folder (read-only convention).
  */
 function resolveKeylogPath(config: CogdexSyncConfig, now: Date): string {
   const dayPattern = config.dayPattern || '%Y-%m-%d';
   const dayName = formatStrftime(dayPattern, now);
   const cleanVault = (config.vaultPath || '').replace(/\/+$/, '');
   const dailyRoot = stripLeadingSlash(config.dailyFolderRoot || 'Daily');
-  return path.join(cleanVault, dailyRoot, dayName, 'README.md');
+  const suffix = config.keylogSuffix ?? ' - keylog';
+  return path.join(cleanVault, dailyRoot, dayName, `${dayName}${suffix}.md`);
 }
 
 export function doSync(config: CogdexSyncConfig): { success: boolean; message: string } {

@@ -21,25 +21,27 @@ const queue: QueuedKeystroke[] = [];
 let isProcessingQueue = false;
 const recentKeys: string[] = [];
 
-// Auto-sync idle timer: triggers doSync() after user stops typing
-let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+// Background sync: runs every 5s while capture is active
+let syncTimer: ReturnType<typeof setInterval> | null = null;
 
-function scheduleAutoSync(): void {
-  const config = getConfig();
-  const idleSecs = config.autoSyncIdleSecs ?? 30;
-  if (idleSecs <= 0 || !config.enabled) return;
-
-  if (autoSyncTimer !== null) {
-    clearTimeout(autoSyncTimer);
-  }
-  autoSyncTimer = setTimeout(() => {
-    autoSyncTimer = null;
+function startBackgroundSync(): void {
+  stopBackgroundSync();
+  syncTimer = setInterval(() => {
+    const config = getConfig();
+    if (!config.enabled || !config.vaultPath) return;
     try {
       doSync(config);
     } catch {
-      // silent — auto-sync is best-effort
+      // background sync is best-effort
     }
-  }, idleSecs * 1000);
+  }, 5000);
+}
+
+function stopBackgroundSync(): void {
+  if (syncTimer !== null) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+  }
 }
 
 // Lazily loaded uiohook handle — only populated after permission granted
@@ -197,9 +199,6 @@ function handleKeyDown(e: UiohookKeyboardEventLike): void {
     keyCode: e.keycode,
   });
 
-  // Schedule auto-sync: will fire after idleTimeout of inactivity
-  scheduleAutoSync();
-
   // Schedule async queue processor without blocking hook callback
   setImmediate(() => {
     processQueue();
@@ -234,6 +233,7 @@ export function startCapture(): boolean {
     uIOhook.start();
 
     isRunning = true;
+    startBackgroundSync();
     return true;
   } catch (err) {
     console.error('Inkwell: Failed to start uiohook key capture:', err);
@@ -243,11 +243,8 @@ export function startCapture(): boolean {
 }
 
 export function stopCapture(): boolean {
+  stopBackgroundSync();
   try {
-    if (autoSyncTimer !== null) {
-      clearTimeout(autoSyncTimer);
-      autoSyncTimer = null;
-    }
     if (hook) {
       hook.removeAllListeners('keydown');
       hook.removeAllListeners('keyup');

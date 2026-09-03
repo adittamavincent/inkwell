@@ -21,14 +21,14 @@ describe('Cogdex Obsidian Sync', () => {
     vi.restoreAllMocks();
   });
 
-  it('cleanly appends new sessions to existing README.md without any boundary markers', () => {
+  it('cleanly appends new sessions to existing keylog note without any boundary markers', () => {
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const dayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
     const noteDir = path.join(tmpVault, 'Daily', dayStr);
     fs.mkdirSync(noteDir, { recursive: true });
-    const notePath = path.join(noteDir, 'README.md');
+    const notePath = path.join(noteDir, `${dayStr} - keylog.md`);
 
     const existingContent = '## 09:00 — Terminal\n\ngit status\n';
     fs.writeFileSync(notePath, existingContent, 'utf8');
@@ -44,7 +44,7 @@ describe('Cogdex Obsidian Sync', () => {
       vaultPath: tmpVault,
       dailyFolderRoot: 'Daily',
       dayPattern: '%Y-%m-%d',
-      autoSyncIdleSecs: 30,
+      keylogSuffix: ' - keylog',
       idleTimeoutSecs: 60,
       appSwitchGraceSecs: 10,
       excludedApps: [],
@@ -60,11 +60,11 @@ describe('Cogdex Obsidian Sync', () => {
     expect(fileContent).not.toContain('LOG-BELOW');
   });
 
-  it('creates parent folder and writes README.md if file does not exist yet', () => {
+  it('creates parent folder and writes keylog note if file does not exist yet', () => {
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const dayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const notePath = path.join(tmpVault, 'Daily', dayStr, 'README.md');
+    const notePath = path.join(tmpVault, 'Daily', dayStr, `${dayStr} - keylog.md`);
 
     vi.spyOn(repo, 'querySessionsSince').mockReturnValue([
       [now.toISOString(), 'Code', 'h'],
@@ -76,7 +76,7 @@ describe('Cogdex Obsidian Sync', () => {
       vaultPath: tmpVault,
       dailyFolderRoot: 'Daily',
       dayPattern: '%Y-%m-%d',
-      autoSyncIdleSecs: 30,
+      keylogSuffix: ' - keylog',
       idleTimeoutSecs: 60,
       appSwitchGraceSecs: 10,
       excludedApps: [],

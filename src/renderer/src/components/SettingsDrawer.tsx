@@ -142,35 +142,32 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
           />
         </div>
 
-        {/* Day Pattern */}
-        <div>
-          <label className="block font-medium text-ink-text mb-1">Day Pattern</label>
-          <input
-            type="text"
-            placeholder="%Y-%m-%d"
-            value={form.dayPattern}
-            onChange={(e) => setForm({ ...form, dayPattern: e.target.value })}
-            className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
-          />
-        </div>
-
-        {/* Auto-sync idle & Idle Timeout */}
+        {/* Day Pattern & Keylog Suffix */}
         <div className="grid grid-cols-2 gap-2.5">
           <div>
-            <label className="block font-medium text-ink-text mb-1">
-              Auto-sync after idle (s)
-            </label>
+            <label className="block font-medium text-ink-text mb-1">Day Pattern</label>
             <input
-              type="number"
-              min="0"
-              max="300"
-              value={form.autoSyncIdleSecs}
-              onChange={(e) =>
-                setForm({ ...form, autoSyncIdleSecs: parseInt(e.target.value, 10) || 0 })
-              }
+              type="text"
+              placeholder="%Y-%m-%d"
+              value={form.dayPattern}
+              onChange={(e) => setForm({ ...form, dayPattern: e.target.value })}
               className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
             />
           </div>
+          <div>
+            <label className="block font-medium text-ink-text mb-1">Keylog Suffix</label>
+            <input
+              type="text"
+              placeholder=" - keylog"
+              value={form.keylogSuffix}
+              onChange={(e) => setForm({ ...form, keylogSuffix: e.target.value })}
+              className="w-full bg-ink-bg border border-ink-border rounded px-2.5 py-1.5 text-ink-text text-xs focus:border-ink-accent transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Idle Timeout & App Switch Grace Period */}
+        <div className="grid grid-cols-2 gap-2.5">
           <div>
             <label className="block font-medium text-ink-text mb-1">
               Idle Gap (s)
