@@ -1,7 +1,7 @@
 allowBuilds:
-  active-win: false
-  better-sqlite3: false
+  active-win: true
+  better-sqlite3: true
   electron: true
   esbuild: true
-  node-mac-permissions: set this to true or false
-  uiohook-napi: false
+  node-mac-permissions: true
+  uiohook-napi: true

@@ -149,29 +149,20 @@ function _handleKeyDownInner(e: UiohookKeyboardEventLike): void {
   const token = mapKeyEventToToken(e, modifiers);
   if (!token) return;
 
-  const appName = getFrontmostAppName();
   const config = getConfig();
 
-  if (isAppExcluded(appName, config.excludedApps)) {
-    return;
-  }
-
+  // Detect paste/snippet triggers synchronously, but defer native calls
+  // (clipboard.readText, activeWin, app.getFileIcon, sips) to main thread
+  // via setImmediate. The uiohook keydown callback runs on a native event-tap
+  // thread — calling Cocoa APIs from there causes EXC_BREAKPOINT / SIGTRAP.
   let finalToken = token;
+  let needsClipRead = false;
+  let clipTrigger: 'paste' | 'q3q' | 'q4q' | null = null;
 
-  // 1. Paste Token Capture (Cmd+V / Ctrl+V)
   if (token === '[⌘V]') {
-    try {
-      const clipText = clipboard.readText();
-      if (clipText) {
-        finalToken = `[PASTE:b64:${Buffer.from(clipText, 'utf8').toString('base64')}]`;
-      } else {
-        finalToken = `[PASTE:b64:]`;
-      }
-    } catch {
-      finalToken = `[PASTE:b64:]`;
-    }
+    needsClipRead = true;
+    clipTrigger = 'paste';
   } else if (token.length === 1 && !token.startsWith('[')) {
-    // Single character tracking for q3q / q4q universal snippets
     const lower = token.toLowerCase();
     if (
       lower === 'q' &&
@@ -179,17 +170,8 @@ function _handleKeyDownInner(e: UiohookKeyboardEventLike): void {
       recentKeys[recentKeys.length - 2] === 'q' &&
       (recentKeys[recentKeys.length - 1] === '3' || recentKeys[recentKeys.length - 1] === '4')
     ) {
-      const isQ3 = recentKeys[recentKeys.length - 1] === '3';
-      try {
-        const clipText = clipboard.readText();
-        if (clipText) {
-          finalToken = isQ3
-            ? `[Q3Q:b64:${Buffer.from(clipText, 'utf8').toString('base64')}]`
-            : `[Q4Q:b64:${Buffer.from(clipText, 'utf8').toString('base64')}]`;
-        }
-      } catch {
-        // Fallback to literal token; reconstructor will expand from its lastPastedContent
-      }
+      needsClipRead = true;
+      clipTrigger = recentKeys[recentKeys.length - 1] === '3' ? 'q3q' : 'q4q';
     }
 
     recentKeys.push(lower);
@@ -200,18 +182,58 @@ function _handleKeyDownInner(e: UiohookKeyboardEventLike): void {
     recentKeys.pop();
   }
 
-  // Fast push to memory queue (< 0.1ms)
-  queue.push({
-    timestamp: new Date().toISOString(),
-    appName,
-    keyChar: finalToken,
-    keyCode: e.keycode,
-  });
+  // getFrontmostAppName() reads from a 250 ms cache populated by the
+  // polling tracker. Avoid triggering refreshActiveApp() here — it touches
+  // activeWin(), fetchAppIcon(), sips, and app.getFileIcon().
+  const appName = getFrontmostAppName();
 
-  // Schedule async queue processor without blocking hook callback
-  setImmediate(() => {
-    processQueue();
-  });
+  if (isAppExcluded(appName, config.excludedApps)) {
+    return;
+  }
+
+  if (needsClipRead) {
+    // Defer clipboard read to main thread; enqueue with the literal token for now.
+    queue.push({
+      timestamp: new Date().toISOString(),
+      appName,
+      keyChar: finalToken,
+      keyCode: e.keycode,
+    });
+    setImmediate(() => {
+      try {
+        const clipText = clipboard.readText();
+        if (clipText) {
+          const b64 = Buffer.from(clipText, 'utf8').toString('base64');
+          if (clipTrigger === 'paste') {
+            finalToken = `[PASTE:b64:${b64}]`;
+          } else if (clipTrigger === 'q3q') {
+            finalToken = `[Q3Q:b64:${b64}]`;
+          } else {
+            finalToken = `[Q4Q:b64:${b64}]`;
+          }
+          // Update the last queued item with the resolved token
+          const last = queue[queue.length - 1];
+          if (last && last.keyCode === e.keycode) {
+            last.keyChar = finalToken;
+          }
+        }
+      } catch {
+        // clipboard read failed — keep the literal token
+      }
+      processQueue();
+    });
+  } else {
+    // Fast push to memory queue (< 0.1ms) for non-clipboard tokens
+    queue.push({
+      timestamp: new Date().toISOString(),
+      appName,
+      keyChar: finalToken,
+      keyCode: e.keycode,
+    });
+    setImmediate(() => {
+      processQueue();
+    });
+  }
 }
 
 function handleKeyUp(e: UiohookKeyboardEventLike): void {

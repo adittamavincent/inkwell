@@ -320,15 +320,21 @@ export function stopActiveAppTracker(): void {
   }
 }
 
+/**
+ * Returns the cached frontmost app name. Safe to call from any thread
+ * (including uiohook's native event-tap thread) — never triggers native
+ * calls (activeWin, sips, getFileIcon). The250ms polling tracker
+ * (startActiveAppTracker) keeps the cache fresh.
+ */
 export function getFrontmostAppName(): string {
-  const now = Date.now();
-  if (now - lastQueryTime > CACHE_TTL_MS) refreshActiveApp();
   return cachedAppName;
 }
 
+/**
+ * Returns the cached frontmost app info. Safe to call from any thread.
+ * Use forceUpdateActiveApp() when an immediate refresh is required.
+ */
 export function getFrontmostAppInfo(): ActiveAppInfo {
-  const now = Date.now();
-  if (now - lastQueryTime > CACHE_TTL_MS) refreshActiveApp();
   return { name: cachedAppName, icon: cachedAppIcon };
 }
 
