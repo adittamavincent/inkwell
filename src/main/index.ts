@@ -19,7 +19,7 @@ import { getIsQuitting, setIsQuitting, requestQuit } from './lifecycle';
 // ── Global error handlers ──────────────────────────────────────────────────────
 // These catch crashes that would otherwise kill the app silently.
 process.on('uncaughtException', (err) => {
-  logger.error('main', 'UNCAUGHT EXCEPTION — app may crash', err);
+  logger.error('main', 'UNCAUGHT EXCEPTION — terminating process', err);
   // Give the logger time to flush before exiting
   setTimeout(() => {
     logger.close();
@@ -29,6 +29,19 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   logger.error('main', 'UNHANDLED PROMISE REJECTION', reason);
+});
+
+process.on('warning', (warning) => {
+  logger.warn('main', `Node process warning: ${warning.name}`, warning);
+});
+
+process.on('beforeExit', (code) => {
+  logger.info('main', `Process beforeExit (code=${code})`);
+});
+
+process.on('exit', (code) => {
+  // exit handlers must remain synchronous; logger writes synchronously when possible
+  logger.info('main', `Process exit (code=${code})`);
 });
 
 process.on('SIGTERM', () => {
@@ -214,6 +227,22 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    logger.error('renderer', 'WebContents failed to load', {
+      errorCode, errorDescription, validatedURL, isMainFrame,
+    });
+  });
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logger.error('renderer', 'Renderer process gone', details);
+  });
+  mainWindow.webContents.on('unresponsive', () => logger.warn('renderer', 'Renderer became unresponsive'));
+  mainWindow.webContents.on('responsive', () => logger.info('renderer', 'Renderer became responsive'));
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) {
+      logger.error('renderer', 'Renderer console error', { level, message, line, sourceId });
+    }
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -222,7 +251,12 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  logger.info('main', `App ready — PID ${process.pid}, platform ${process.platform}`);
+  logger.info('main', `App ready — PID ${process.pid}, platform ${process.platform}`, {
+    versions: process.versions,
+    run: logger.getRunContext(),
+    args: process.argv,
+    cwd: process.cwd(),
+  });
 
   // Set custom Dock icon in dev mode if available
   if (process.platform === 'darwin' && app.dock) {
@@ -270,6 +304,7 @@ app.whenReady().then(() => {
 app.on('before-quit', (event) => {
   // On macOS, prevent quitting unless requestQuit() was explicitly called (e.g. from Tray menu)
   if (!getIsQuitting() && process.platform === 'darwin') {
+    logger.debug('main', 'before-quit intercepted — hiding window because quit was not requested');
     event.preventDefault();
     hideWindow();
     return;
@@ -281,6 +316,10 @@ app.on('before-quit', (event) => {
   stopActiveAppTracker();
   stopCapture();
   logger.close();
+});
+
+app.on('child-process-gone', (_event, details) => {
+  logger.error('main', 'Electron child process gone', details);
 });
 
 app.on('window-all-closed', () => {

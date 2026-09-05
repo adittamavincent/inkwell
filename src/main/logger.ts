@@ -8,6 +8,8 @@ const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_LOG_FILES = 3;
 
 let logStream: fs.WriteStream | null = null;
+const runId = `${process.pid}-${Date.now().toString(36)}`;
+const startedAt = Date.now();
 
 function ensureLogDir(): void {
   if (!fs.existsSync(LOG_DIR)) {
@@ -50,6 +52,11 @@ function getStream(): fs.WriteStream | null {
   rotateIfNeeded();
   try {
     logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+    // A logging failure must never become the application failure. This is
+    // especially important in tests and when the log directory is unavailable.
+    logStream.on('error', () => {
+      logStream = null;
+    });
     return logStream;
   } catch {
     return null;
@@ -60,19 +67,22 @@ function timestamp(): string {
   return new Date().toISOString();
 }
 
+function serializeData(data: unknown): unknown {
+  if (data instanceof Error) {
+    return { name: data.name, message: data.message, stack: data.stack, cause: data.cause };
+  }
+  if (typeof data === 'string') return data;
+  return data;
+}
+
 function write(level: string, component: string, message: string, data?: unknown): void {
   const stream = getStream();
   if (!stream) return;
 
-  let line = `${timestamp()} [${level}] [${component}] ${message}`;
+  let line = `${timestamp()} [${level}] [${component}] [pid=${process.pid} run=${runId} uptimeMs=${Math.round(process.uptime() * 1000)}] ${message}`;
   if (data !== undefined) {
     try {
-      const serialized = data instanceof Error
-        ? `${data.message}\n${data.stack}`
-        : typeof data === 'string'
-          ? data
-          : JSON.stringify(data, null, 2);
-      line += ` | ${serialized}`;
+      line += ` | ${JSON.stringify(serializeData(data))}`;
     } catch {
       line += ` | [unserializable]`;
     }
@@ -115,5 +125,9 @@ export const logger = {
   /** Returns the log file path for display to the user. */
   getLogPath(): string {
     return LOG_FILE;
+  },
+
+  getRunContext(): { runId: string; pid: number; startedAt: string } {
+    return { runId, pid: process.pid, startedAt: new Date(startedAt).toISOString() };
   },
 };
