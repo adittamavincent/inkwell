@@ -35,6 +35,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify Apple Silicon runner
+        run: |
+          echo "Runner architecture: $(uname -m)"
+          echo "Node architecture: $(node -p 'process.arch' 2>/dev/null || true)"
+          if [ "$(uname -m)" != "arm64" ]; then
+            echo "::error::This release must run natively on an Apple Silicon arm64 runner."
+            exit 1
+          fi
+
       # -----------------------------------------------------------------------
       # Guard: fail fast & loudly if any required secret is missing, so we never
       # fall through to publishing an unsigned build.
@@ -111,7 +120,7 @@ jobs:
           CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          pnpm run build
+          pnpm run build -- --arch arm64 --publish never
 
       # -----------------------------------------------------------------------
       # Guard: ensure the .app is genuinely Developer-ID signed (not ad-hoc).
