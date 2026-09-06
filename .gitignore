@@ -3,6 +3,7 @@ dist/
 dist-electron/
 release/
 target/
+*.tgz
 
 # Node
 node_modules/

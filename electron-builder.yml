@@ -1,6 +1,6 @@
 appId: com.inkwell.app
 productName: Inkwell
-npmRebuild: true
+npmRebuild: false
 electronVersion: 33.2.1
 directories:
   output: release
