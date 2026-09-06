@@ -22,6 +22,7 @@ process.on('uncaughtException', (err) => {
   logger.error('main', 'UNCAUGHT EXCEPTION — terminating process', err);
   // Give the logger time to flush before exiting
   setTimeout(() => {
+    logger.writeCleanShutdown();
     logger.close();
     process.exit(1);
   }, 200);
@@ -251,6 +252,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  logger.checkPreviousRun();
+  logger.info('main', 'Build info', { appVersion: app.getVersion(), logFormatVersion: 2 });
   logger.info('main', `App ready — PID ${process.pid}, platform ${process.platform}`, {
     versions: process.versions,
     run: logger.getRunContext(),
@@ -291,6 +294,7 @@ app.whenReady().then(() => {
   }, 2000);
 
   logger.info('main', 'Initialization complete');
+  logger.startHeartbeat();
 
   app.on('activate', () => {
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
@@ -315,6 +319,7 @@ app.on('before-quit', (event) => {
   stopPermissionWatcher();
   stopActiveAppTracker();
   stopCapture();
+  logger.writeCleanShutdown();
   logger.close();
 });
 

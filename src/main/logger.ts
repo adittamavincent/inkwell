@@ -4,12 +4,15 @@ import os from 'node:os';
 
 const LOG_DIR = path.join(os.homedir(), 'Library', 'Logs', 'Inkwell');
 const LOG_FILE = path.join(LOG_DIR, 'inkwell.log');
+const HEARTBEAT_FILE = path.join(LOG_DIR, 'heartbeat.json');
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_LOG_FILES = 3;
+const HEARTBEAT_INTERVAL_MS = 20_000; // 20 seconds
 
 let logStream: fs.WriteStream | null = null;
 const runId = `${process.pid}-${Date.now().toString(36)}`;
 const startedAt = Date.now();
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 function ensureLogDir(): void {
   if (!fs.existsSync(LOG_DIR)) {
@@ -90,6 +93,58 @@ function write(level: string, component: string, message: string, data?: unknown
   stream.write(line + '\n');
 }
 
+// ── Heartbeat mechanism (unclean-shutdown detection) ─────────────────────────
+// Writes a small JSON file periodically so the *next* boot can detect if the
+// previous session ended without a clean shutdown (native crash, SIGSEGV, etc).
+
+function writeHeartbeatFile(extra?: Record<string, unknown>): void {
+  try {
+    ensureLogDir();
+    const payload = {
+      runId,
+      pid: process.pid,
+      lastHeartbeatAt: new Date().toISOString(),
+      ...extra,
+    };
+    fs.writeFileSync(HEARTBEAT_FILE, JSON.stringify(payload), 'utf-8');
+  } catch {
+    // Heartbeat failure must never affect the app
+  }
+}
+
+function startHeartbeat(): void {
+  if (heartbeatTimer) return;
+  writeHeartbeatFile();
+  heartbeatTimer = setInterval(() => writeHeartbeatFile(), HEARTBEAT_INTERVAL_MS);
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+/** Call on clean shutdown to mark this runId as cleanly exited. */
+function writeCleanShutdown(): void {
+  writeHeartbeatFile({ cleanShutdown: true });
+  stopHeartbeat();
+}
+
+/**
+ * Read the heartbeat file left by the previous run. Returns null if no file
+ * exists or it cannot be read. Otherwise returns the parsed JSON.
+ */
+function readPreviousHeartbeat(): Record<string, unknown> | null {
+  try {
+    if (!fs.existsSync(HEARTBEAT_FILE)) return null;
+    const raw = fs.readFileSync(HEARTBEAT_FILE, 'utf-8');
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export const logger = {
   info(component: string, message: string, data?: unknown): void {
     write('INFO', component, message, data);
@@ -120,6 +175,33 @@ export const logger = {
       }
       logStream = null;
     }
+  },
+
+  /** Start the periodic heartbeat writer. Call once after app.whenReady(). */
+  startHeartbeat(): void {
+    startHeartbeat();
+  },
+
+  /** Stop the heartbeat and write a clean-shutdown marker. */
+  writeCleanShutdown(): void {
+    writeCleanShutdown();
+  },
+
+  /**
+   * Check if the previous run ended uncleanly. Logs an ERROR if so.
+   * Call at the very start of app.whenReady(), before any other logging.
+   */
+  checkPreviousRun(): void {
+    const prev = readPreviousHeartbeat();
+    if (prev && typeof prev.runId === 'string' && !prev.cleanShutdown) {
+      write('ERROR', 'main', 'Previous session ended unexpectedly — no clean shutdown detected', {
+        previousRunId: prev.runId,
+        previousPid: prev.pid,
+        lastHeartbeatAt: prev.lastHeartbeatAt,
+      });
+    }
+    // Write initial heartbeat for this run (overwrites the stale file)
+    writeHeartbeatFile();
   },
 
   /** Returns the log file path for display to the user. */
