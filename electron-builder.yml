@@ -10,6 +10,8 @@ files:
   - dist-electron/**/*
   - icons/**/*
   - package.json
+asarUnpack:
+  - "**/*.node"
 afterPack: build/afterPack.cjs
 mac:
   extendInfo:

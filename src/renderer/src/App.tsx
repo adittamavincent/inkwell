@@ -141,6 +141,9 @@ export const App: React.FC = () => {
       const fullyAuthorized =
         status.accessibility === 'authorized' && status.inputMonitoring === 'authorized';
       setIsOnboarded(fullyAuthorized);
+    }).catch((err) => {
+      console.error('Failed to check permissions:', err);
+      setIsOnboarded(false);
     });
 
     // Active App Changed Listener
@@ -248,12 +251,16 @@ export const App: React.FC = () => {
     );
 
     const unsubscribePermissionGranted = window.inkwellApi.onPermissionGranted?.(() => {
-      window.inkwellApi?.checkPermissions().then(handlePermissionUpdate);
+      window.inkwellApi?.checkPermissions().then(handlePermissionUpdate).catch((err) => {
+        console.error('Failed to check permissions after grant:', err);
+      });
     });
 
     const unsubscribePermissionRevoked = window.inkwellApi.onPermissionRevoked?.(() => {
       setIsRunning(false);
-      window.inkwellApi?.checkPermissions().then(handlePermissionUpdate);
+      window.inkwellApi?.checkPermissions().then(handlePermissionUpdate).catch((err) => {
+        console.error('Failed to check permissions after revoke:', err);
+      });
     });
 
     return () => {
@@ -274,6 +281,9 @@ export const App: React.FC = () => {
         isChecking = true;
         api.checkPermissions()
           .then(handlePermissionUpdate)
+          .catch((err) => {
+            console.error('Failed to check permissions on focus:', err);
+          })
           .finally(() => {
             setTimeout(() => {
               isChecking = false;

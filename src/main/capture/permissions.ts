@@ -1,13 +1,22 @@
 import { createRequire } from 'node:module';
 import { shell, systemPreferences } from 'electron';
+import { logger } from '../logger';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let macPermissions: any = null;
+let nativeModuleLoadAttempted = false;
 
 function getMacPermissions(): any {
-  if (!macPermissions && process.platform === 'darwin') {
-    macPermissions = require('node-mac-permissions');
+  if (macPermissions) return macPermissions;
+  if (process.platform === 'darwin' && !nativeModuleLoadAttempted) {
+    nativeModuleLoadAttempted = true;
+    try {
+      macPermissions = require('node-mac-permissions');
+    } catch (err) {
+      logger.error('permissions', 'Failed to load node-mac-permissions native module', err);
+      macPermissions = null;
+    }
   }
   return macPermissions;
 }
@@ -26,22 +35,25 @@ export interface PermissionStatus {
 }
 
 export function checkAccessibilityStatus(): AuthStatus {
-  if (process.platform !== 'darwin') return 'authorized';
-  if (macPermissions && typeof macPermissions.getAuthStatus === 'function') {
-    return macPermissions.getAuthStatus('accessibility');
+  const perms = getMacPermissions();
+  if (!perms) return process.platform === 'darwin' ? 'denied' : 'authorized';
+  if (typeof perms.getAuthStatus === 'function') {
+    return perms.getAuthStatus('accessibility');
   }
   // systemPreferences.isTrustedAccessibilityClient(false) guarantees no OS dialog popup
   if (systemPreferences && typeof systemPreferences.isTrustedAccessibilityClient === 'function') {
     return systemPreferences.isTrustedAccessibilityClient(false) ? 'authorized' : 'denied';
   }
-  const perms = getMacPermissions();
-  return perms ? perms.getAuthStatus('accessibility') : 'authorized';
+  return 'denied';
 }
 
 export function checkInputMonitoringStatus(): AuthStatus {
-  if (process.platform !== 'darwin') return 'authorized';
   const perms = getMacPermissions();
-  return perms ? perms.getAuthStatus('input-monitoring') : 'authorized';
+  if (!perms) return process.platform === 'darwin' ? 'denied' : 'authorized';
+  if (typeof perms.getAuthStatus === 'function') {
+    return perms.getAuthStatus('input-monitoring');
+  }
+  return 'denied';
 }
 
 export function requestAccessibilityAccess(): void {

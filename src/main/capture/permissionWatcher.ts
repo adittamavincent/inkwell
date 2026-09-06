@@ -101,14 +101,22 @@ export function startPermissionWatcher(
   }
 
   // Initial check and state synchronization
-  checkAndSyncPermissionState();
+  try {
+    checkAndSyncPermissionState();
+  } catch (err) {
+    logger.error('permissionWatcher', 'Error during initial permission check', err);
+  }
 
   if (activeInterval) {
     return () => stopPermissionWatcher();
   }
 
   activeInterval = setInterval(() => {
-    checkAndSyncPermissionState();
+    try {
+      checkAndSyncPermissionState();
+    } catch (err) {
+      logger.error('permissionWatcher', 'Error during periodic permission check', err);
+    }
   }, pollIntervalMs);
 
   return () => {
