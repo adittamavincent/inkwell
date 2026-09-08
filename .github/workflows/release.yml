@@ -134,7 +134,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Verify codesigning (fail if ad-hoc or unsigned)
         run: |
-          APP="release/mac-arm64/Inkwell.app"
+          APP="dist/mac-arm64/Inkwell.app"
           codesign --verify --strict --verbose=2 "$APP"
           INFO=$(codesign -dvv "$APP" 2>&1)
           if echo "$INFO" | grep -qi "Ad-hoc"; then
@@ -160,7 +160,7 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
-          DMG=$(find release -maxdepth 1 -name '*.dmg' | head -n1)
+          DMG=$(find dist -maxdepth 1 -name '*.dmg' | head -n1)
           echo "DMG=$DMG" >> "$GITHUB_ENV"
           xcrun notarytool submit "$DMG" --keychain-profile "inkwell-notary" --wait
 
@@ -172,7 +172,7 @@ jobs:
 
       - name: Locate zipped .app
         run: |
-          ZIP=$(find release -maxdepth 1 -name '*.zip' | head -n1)
+          ZIP=$(find dist -maxdepth 1 -name '*.zip' | head -n1)
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------

@@ -7,7 +7,7 @@ module.exports = {
   publish: null, // never auto-publish — release.yml handles GitHub release manually
   electronVersion: '33.2.1',
   directories: {
-    output: 'release',
+    output: 'dist',
     buildResources: 'build',
   },
   files: ['dist/**/*', 'dist-electron/**/*', 'icons/**/*', 'package.json'],
