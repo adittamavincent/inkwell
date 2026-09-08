@@ -4,6 +4,7 @@ module.exports = {
   appId: 'com.inkwell.app',
   productName: 'Inkwell',
   npmRebuild: false,
+  publish: null, // never auto-publish — release.yml handles GitHub release manually
   electronVersion: '33.2.1',
   directories: {
     output: 'release',
