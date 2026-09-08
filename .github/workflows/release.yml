@@ -122,12 +122,8 @@ jobs:
       # Package (.app / .dmg) with electron-builder
       # -----------------------------------------------------------------------
       - name: Build & Package with electron-builder
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: true
-          CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          pnpm run build -- --publish never --mac.identity "$CSC_NAME"
+          pnpm run build -- --publish never
 
       # -----------------------------------------------------------------------
       # Guard: ensure the .app is genuinely Developer-ID signed (not ad-hoc).
