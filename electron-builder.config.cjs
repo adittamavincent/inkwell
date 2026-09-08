@@ -1,5 +1,3 @@
-const isCI = !!process.env.CSC_NAME;
-
 module.exports = {
   appId: 'com.inkwell.app',
   productName: 'Inkwell',
@@ -16,8 +14,8 @@ module.exports = {
   mac: {
     extendInfo: { LSUIElement: true },
     category: 'public.app-category.utilities',
-    identity: isCI ? process.env.CSC_NAME : null,
-    hardenedRuntime: isCI,
+    identity: null,
+    hardenedRuntime: false,
     gatekeeperAssess: false,
     entitlements: 'build/entitlements.mac.plist',
     entitlementsInherit: 'build/entitlements.mac.plist',

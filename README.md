@@ -109,6 +109,22 @@ Permissions granted in macOS System Settings will now persist across `pnpm run b
 
 > **Note on Hardened Runtime**: Local self-signed certificates do not have an Apple Team ID chain, so `hardenedRuntime: false` is configured in `electron-builder.yml` for local builds. Production release builds paired with an official Apple Developer ID certificate and notarization will re-enable `hardenedRuntime: true`.
 
+### Running the unsigned build
+
+GitHub Releases builds are distributed as an **unsigned, ad-hoc** `.dmg`/`.zip` and are **not notarized** because the project does not have a paid Apple Developer Program membership. macOS Gatekeeper will therefore quarantine the downloaded app and may show a message like *"Inkwell.app can't be opened because it is from an unidentified developer"* on first launch.
+
+To open the app anyway:
+
+1. **Recommended:** In Finder, **right-click (or Control-click)** the `Inkwell.app` (or the app inside the mounted `.dmg`) and choose **Open**. In the security dialog that appears, click **Open** again to allow it.
+
+2. If the right-click method still fails, open Terminal and remove the quarantine attribute:
+
+   ```bash
+   xattr -cr /Applications/Inkwell.app
+   ```
+
+   Then launch the app normally.
+
 ---
 
 ## License
