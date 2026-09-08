@@ -12,6 +12,12 @@ let activeInterval: NodeJS.Timeout | null = null;
 let lastKnownStatus: PermissionStatus | null = null;
 let statusChangeCallback: ((status: PermissionStatus) => void) | null = null;
 
+// Debounce: require N consecutive identical polls before acting on a status change
+// to avoid flapping when macOS briefly reports stale permission state.
+let pendingStatus: PermissionStatus | null = null;
+let pendingCount = 0;
+const DEBOUNCE_CONFIRMATIONS = 2;
+
 function broadcastPermissionState(status: PermissionStatus): void {
   const isFullyAuthorized =
     status.accessibility === 'authorized' && status.inputMonitoring === 'authorized';
@@ -62,7 +68,26 @@ export function checkAndSyncPermissionState(): PermissionStatus {
     lastKnownStatus.inputMonitoring !== currentStatus.inputMonitoring;
 
   if (hasChanged) {
+    // Debounce: require N consecutive identical polls before acting
+    if (
+      pendingStatus &&
+      pendingStatus.accessibility === currentStatus.accessibility &&
+      pendingStatus.inputMonitoring === currentStatus.inputMonitoring
+    ) {
+      pendingCount++;
+    } else {
+      pendingStatus = currentStatus;
+      pendingCount = 1;
+    }
+
+    if (pendingCount < DEBOUNCE_CONFIRMATIONS) {
+      return currentStatus;
+    }
+
+    // Confirmed — act on the change
     lastKnownStatus = currentStatus;
+    pendingStatus = null;
+    pendingCount = 0;
 
     if (isFullyAuthorized) {
       logger.info('permissionWatcher', 'Permissions fully authorized — starting capture & app tracker');
@@ -83,6 +108,10 @@ export function checkAndSyncPermissionState(): PermissionStatus {
         logger.error('permissionWatcher', 'Error in permission status callback', err);
       }
     }
+  } else {
+    // Status stable — clear any pending debounce
+    pendingStatus = null;
+    pendingCount = 0;
   }
 
   return currentStatus;

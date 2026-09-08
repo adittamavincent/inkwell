@@ -112,7 +112,7 @@ export function doSync(config: CogdexSyncConfig): { success: boolean; message: s
   try {
     appendToNote(notePath, blocks);
     writeLastSync(now);
-    logger.info('cogdexSync', `Synced ${sessions.length} session(s) to ${notePath}`);
+    logger.debug('cogdexSync', `Synced ${sessions.length} session(s) to ${notePath}`);
     return {
       success: true,
       message: `Synced ${sessions.length} session(s) to ${notePath}`,

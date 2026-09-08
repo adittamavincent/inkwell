@@ -17,6 +17,8 @@ let lastQueryTime = 0;
 const CACHE_TTL_MS = 250;
 let isQuerying = false;
 let pollingInterval: NodeJS.Timeout | null = null;
+let lastSuppressedLogTime = 0;
+const SUPPRESS_LOG_INTERVAL_MS = 5000;
 
 /**
  * Confirmed real icons are stored here.
@@ -280,7 +282,11 @@ async function refreshActiveApp(): Promise<void> {
       if (isCurrentApp) {
         // Do NOT broadcast Inkwell as the active app — this causes ghost focus issues.
         // Keep the previous cached app name so other apps aren't interrupted.
-        logger.debug('activeApp', `activeWin returned Inkwell/Electron (pid=${result.owner.processId}), suppressing broadcast`);
+        const now = Date.now();
+        if (now - lastSuppressedLogTime > SUPPRESS_LOG_INTERVAL_MS) {
+          logger.debug('activeApp', `activeWin returned Inkwell/Electron (pid=${result.owner.processId}), suppressing broadcast`);
+          lastSuppressedLogTime = now;
+        }
         return;
       }
 

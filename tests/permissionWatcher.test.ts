@@ -126,11 +126,16 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
     expect(status1).toEqual({ accessibility: 'authorized', inputMonitoring: 'authorized' });
     expect(isCaptureRunning()).toBe(true);
 
-    // Revoke accessibility
+    // Revoke accessibility — first poll is pending (debounce)
     accStatus = 'denied';
-
     const status2 = checkAndSyncPermissionState();
     expect(status2).toEqual({ accessibility: 'denied', inputMonitoring: 'authorized' });
+    // Not yet stopped — waiting for second confirming poll
+    expect(isCaptureRunning()).toBe(true);
+
+    // Second poll confirms the revocation -> capture stops
+    const status3 = checkAndSyncPermissionState();
+    expect(status3).toEqual({ accessibility: 'denied', inputMonitoring: 'authorized' });
     expect(isCaptureRunning()).toBe(false);
     expect(mockHook.stop).toHaveBeenCalled();
   });
@@ -159,7 +164,8 @@ describe('Permission Check & Capture Guard (node-mac-permissions)', () => {
     // Change status
     currentStatus = 'authorized';
 
-    vi.advanceTimersByTime(500);
+    // First poll detects change (pending), second poll confirms it (debounce)
+    vi.advanceTimersByTime(1000);
 
     expect(callback).toHaveBeenCalledWith({
       accessibility: 'authorized',
