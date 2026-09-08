@@ -59,9 +59,8 @@ export function reconstructText(tokens: string[]): string {
         content = rawToken.slice(7, -1);
       }
       lastPastedContent = content;
-      const prefix = cursor > 0 && buffer[cursor - 1] !== '\n' ? '\n' : '';
-      const snippet = `${prefix}\`\`\`\n${content}\n\`\`\`\n`;
-      const chars = snippet.split('');
+      // Plain paste: insert content directly without backtick fence
+      const chars = content.split('');
       buffer.splice(cursor, 0, ...chars);
       cursor += chars.length;
       continue;
