@@ -127,7 +127,7 @@ jobs:
           CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          pnpm run build
+          pnpm run build -- --publish never
 
       # -----------------------------------------------------------------------
       # Guard: ensure the .app is genuinely Developer-ID signed (not ad-hoc).
